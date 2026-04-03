@@ -24,6 +24,7 @@ class StudioController extends ChangeNotifier {
   bool isBusy = false;
   bool isSaving = false;
   bool isGenerating = false;
+  bool isExplaining = false;
   bool isApplyingInstruction = false;
   bool isValidating = false;
   bool isUsingBundledFallback = false;
@@ -42,6 +43,7 @@ class StudioController extends ChangeNotifier {
       <ComponentCatalogItemModel>[];
   PageDocumentModel? currentDocument;
   GeneratedPageResultModel? lastGeneration;
+  PageExplanationResultModel? lastExplanation;
   PageUpdateResultModel? lastInstructionUpdate;
   PageValidationResultModel? validationResult;
 
@@ -154,6 +156,7 @@ class StudioController extends ChangeNotifier {
       currentDocument =
           document.copyWith(definition: _cloneMap(document.definition));
       lastGeneration = null;
+      lastExplanation = null;
       lastInstructionUpdate = null;
 
       if (isUsingBundledFallback) {
@@ -194,6 +197,7 @@ class StudioController extends ChangeNotifier {
       final parsed = jsonDecode(source) as Map<String, dynamic>;
       currentDocument =
           currentDocument?.copyWith(definition: _cloneMap(parsed));
+      lastExplanation = null;
       statusMessage = 'JSON 已应用到预览';
       error = null;
       await _persistDraft();
@@ -210,6 +214,7 @@ class StudioController extends ChangeNotifier {
   Future<void> addBlock(String kind) async {
     final block = _buildSnippet(kind);
     _editableChildren().add(block);
+    lastExplanation = null;
     statusMessage = '已添加 $kind 组件块';
     await _persistDraft();
     _bumpSource();
@@ -223,6 +228,7 @@ class StudioController extends ChangeNotifier {
       return;
     }
     children.removeAt(index);
+    lastExplanation = null;
     statusMessage = '已删除组件块';
     await _persistDraft();
     _bumpSource();
@@ -237,6 +243,7 @@ class StudioController extends ChangeNotifier {
     }
     final item = children.removeAt(oldIndex);
     children.insert(newIndex, item);
+    lastExplanation = null;
     statusMessage = '已重新排序组件块';
     await _persistDraft();
     _bumpSource();
@@ -254,6 +261,7 @@ class StudioController extends ChangeNotifier {
       return;
     }
     currentDocument = currentDocument?.copyWith(definition: _cloneMap(draft));
+    lastExplanation = null;
     draftUpdatedAt = draftStore.readDraftUpdatedAt(slug);
     statusMessage = '已恢复草稿';
     _bumpSource();
@@ -295,6 +303,7 @@ class StudioController extends ChangeNotifier {
       );
 
       lastGeneration = generated;
+      lastExplanation = null;
       lastInstructionUpdate = null;
       currentDocument = PageDocumentModel(
         slug: generated.slug,
@@ -358,6 +367,7 @@ class StudioController extends ChangeNotifier {
       );
 
       lastInstructionUpdate = updated;
+      lastExplanation = null;
       currentDocument = document.copyWith(
         title: updated.title,
         description: updated.summary,
@@ -372,6 +382,39 @@ class StudioController extends ChangeNotifier {
       statusMessage = 'AI 修改失败';
     } finally {
       isApplyingInstruction = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> explainCurrentPage() async {
+    final document = currentDocument;
+    if (document == null) {
+      error = '当前没有可解释的页面';
+      statusMessage = '页面解释失败';
+      notifyListeners();
+      return;
+    }
+
+    if (!canUseAiTools) {
+      error = '当前服务端不可用，暂时无法解释页面';
+      statusMessage = '页面解释不可用';
+      notifyListeners();
+      return;
+    }
+
+    isExplaining = true;
+    error = null;
+    notifyListeners();
+
+    try {
+      final explanation = await repository.explainPage(document.definition);
+      lastExplanation = explanation;
+      statusMessage = '页面结构说明已生成';
+    } catch (explainError) {
+      error = explainError.toString();
+      statusMessage = '页面解释失败';
+    } finally {
+      isExplaining = false;
       notifyListeners();
     }
   }

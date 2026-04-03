@@ -354,6 +354,62 @@ class PageUpdateResultModel {
   }
 }
 
+class PageExplanationResultModel {
+  PageExplanationResultModel({
+    required this.summary,
+    required this.pageType,
+    required this.structure,
+    required this.usedComponents,
+    required this.actionSummary,
+    required this.bindingSummary,
+    required this.warnings,
+  });
+
+  final String summary;
+  final String pageType;
+  final List<String> structure;
+  final List<String> usedComponents;
+  final List<String> actionSummary;
+  final List<String> bindingSummary;
+  final List<String> warnings;
+
+  factory PageExplanationResultModel.fromJson(Map<String, dynamic> json) {
+    return PageExplanationResultModel(
+      summary: json['summary'] as String? ?? '',
+      pageType: json['pageType'] as String? ?? 'dashboard',
+      structure: (json['structure'] as List<dynamic>? ?? <dynamic>[])
+          .map((item) => item.toString())
+          .toList(),
+      usedComponents: (json['usedComponents'] as List<dynamic>? ?? <dynamic>[])
+          .map((item) => item.toString())
+          .toList(),
+      actionSummary: (json['actionSummary'] as List<dynamic>? ?? <dynamic>[])
+          .map((item) => item.toString())
+          .toList(),
+      bindingSummary: (json['bindingSummary'] as List<dynamic>? ?? <dynamic>[])
+          .map((item) => item.toString())
+          .toList(),
+      warnings: (json['warnings'] as List<dynamic>? ?? <dynamic>[])
+          .map((item) => item.toString())
+          .toList(),
+    );
+  }
+}
+
+class StudioSmokeEntryModel {
+  StudioSmokeEntryModel({
+    required this.title,
+    required this.detail,
+    required this.status,
+    required this.timestamp,
+  });
+
+  final String title;
+  final String detail;
+  final String status;
+  final String timestamp;
+}
+
 class ComponentPropModel {
   ComponentPropModel({
     required this.name,

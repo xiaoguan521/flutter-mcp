@@ -145,6 +145,22 @@ class PageRepository {
     );
   }
 
+  Future<PageExplanationResultModel> explainPage(
+    Map<String, dynamic> definition,
+  ) async {
+    final response = await _client.post(
+      _uri('/api/tools/explain_page'),
+      headers: <String, String>{'content-type': 'application/json'},
+      body: jsonEncode(<String, dynamic>{
+        'definition': definition,
+      }),
+    );
+    final body = _decodeBody(response);
+    return PageExplanationResultModel.fromJson(
+      Map<String, dynamic>.from(body['result'] as Map),
+    );
+  }
+
   Future<PageUpdateResultModel> updatePageByInstruction({
     required Map<String, dynamic> definition,
     required String instruction,

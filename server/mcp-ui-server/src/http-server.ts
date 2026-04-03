@@ -246,6 +246,20 @@ export function createHttpServer(options: {
             result,
           });
         }
+        case "explain_page": {
+          if (!payload.definition || typeof payload.definition !== "object") {
+            return jsonError(res, 400, "explain_page requires definition.");
+          }
+
+          const result = await options.toolService.explainPage({
+            definition: payload.definition as Record<string, unknown>,
+          });
+
+          return res.json({
+            success: true,
+            result,
+          });
+        }
         case "update_page_by_instruction": {
           if (!payload.definition || typeof payload.definition !== "object") {
             return jsonError(res, 400, "update_page_by_instruction requires definition.");

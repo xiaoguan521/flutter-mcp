@@ -40,6 +40,18 @@ void main() {
     expect(controller.lastInstructionUpdate!.appliedChanges, isNotEmpty);
     expect(controller.validationResult?.valid, isTrue);
 
+    await controller.explainCurrentPage();
+
+    expect(controller.lastExplanation, isNotNull);
+    expect(controller.lastExplanation!.pageType, 'table-list');
+    expect(controller.lastExplanation!.usedComponents, isNotEmpty);
+    expect(
+      controller.lastExplanation!.actionSummary.any(
+        (item) => item.contains('persistPage'),
+      ),
+      isTrue,
+    );
+
     final saveResult = await controller.persistCurrentPage();
 
     expect(saveResult.page.slug, 'ai-customer-list');
@@ -165,6 +177,32 @@ class _FakePageRepository extends PageRepository {
       warnings: const <ValidationIssueModel>[],
       normalizedDefinition: _clone(definition),
       usedComponents: _collectTypes(definition).toList()..sort(),
+    );
+  }
+
+  @override
+  Future<PageExplanationResultModel> explainPage(
+    Map<String, dynamic> definition,
+  ) async {
+    return PageExplanationResultModel(
+      summary: 'This table/list page has searchable rows and save actions.',
+      pageType: 'table-list',
+      structure: const <String>[
+        '- linear',
+        '  - searchBar (Search)',
+        '  - antdSection (Customer Table)',
+      ],
+      usedComponents: _collectTypes(definition).toList()..sort(),
+      actionSummary: const <String>[
+        'page.content.children[0].searchAction: state -> app.statusText',
+        'page.content.children[1].child.children[0].click: tool -> persistPage',
+      ],
+      bindingSummary: const <String>[
+        'app.filters.keyword',
+        'app.statusText',
+        'app.rows',
+      ],
+      warnings: const <String>[],
     );
   }
 

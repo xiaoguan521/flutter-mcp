@@ -1,5 +1,7 @@
 import type {
   ComponentCatalogItem,
+  ExplainPageInput,
+  ExplainPageResult,
   GeneratePageInput,
   GeneratePageFromPromptInput,
   GeneratedPageResult,
@@ -13,6 +15,7 @@ import type {
   ValidatePageResult,
 } from "./types.js";
 import {
+  explainPageDefinition,
   generatePageFromPrompt,
   listComponentCatalog,
   updatePageByInstruction,
@@ -83,6 +86,12 @@ export class ToolService {
     input: UpdatePageByInstructionInput,
   ): Promise<UpdatePageByInstructionResult> {
     return updatePageByInstruction(input);
+  }
+
+  async explainPage(
+    input: ExplainPageInput,
+  ): Promise<ExplainPageResult> {
+    return explainPageDefinition(input.definition);
   }
 
   async listComponents(

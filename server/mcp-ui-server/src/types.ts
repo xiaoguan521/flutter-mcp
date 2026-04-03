@@ -124,6 +124,22 @@ export interface UpdatePageByInstructionResult {
   appliedChanges: string[];
 }
 
+export interface ExplainPageInput {
+  [key: string]: unknown;
+  definition: JsonObject;
+}
+
+export interface ExplainPageResult {
+  [key: string]: unknown;
+  summary: string;
+  pageType: string;
+  structure: string[];
+  usedComponents: string[];
+  actionSummary: string[];
+  bindingSummary: string[];
+  warnings: string[];
+}
+
 export interface ValidationIssue {
   [key: string]: unknown;
   path: string;

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type {
   ComponentCatalogItem,
+  ExplainPageResult,
   GeneratePageFromPromptInput,
   GeneratedPageResult,
   JsonObject,
@@ -579,6 +580,147 @@ function addInstructionWarnings(instruction: string, warnings: string[]): void {
       warnings.push(rule.message);
     }
   }
+}
+
+function inferPageTypeFromDefinition(definition: JsonObject): PageType {
+  const validation = validatePageDefinition(definition);
+  const usedComponents = new Set(validation.usedComponents);
+  if (usedComponents.has("searchBar") || usedComponents.has("antdTable")) {
+    return "table-list";
+  }
+  if (usedComponents.has("form") || usedComponents.has("input") || usedComponents.has("textarea")) {
+    return "form";
+  }
+  return "dashboard";
+}
+
+function summarizeNode(node: JsonObject, depth: number, lines: string[]): void {
+  const type = typeof node.type === "string" ? node.type : "unknown";
+  const labelCandidates = [
+    node.title,
+    node.label,
+    node.subtitle,
+  ].filter((value): value is string => typeof value === "string" && value.trim().length > 0);
+  const indent = "  ".repeat(depth);
+  const suffix = labelCandidates.isNotEmpty ? ` (${labelCandidates[0]})` : "";
+  lines.push(`${indent}- ${type}${suffix}`);
+
+  if (Array.isArray(node.children)) {
+    for (const child of node.children) {
+      if (isObject(child)) {
+        summarizeNode(child, depth + 1, lines);
+      }
+    }
+  }
+
+  if (isObject(node.child)) {
+    summarizeNode(node.child, depth + 1, lines);
+  }
+
+  if (Array.isArray(node.filters)) {
+    for (const filter of node.filters) {
+      if (isObject(filter)) {
+        summarizeNode(filter, depth + 1, lines);
+      }
+    }
+  }
+
+  if (Array.isArray(node.actions)) {
+    for (const actionNode of node.actions) {
+      if (isObject(actionNode)) {
+        summarizeNode(actionNode, depth + 1, lines);
+      }
+    }
+  }
+}
+
+function collectPageActionSummary(definition: JsonObject): string[] {
+  const actions = new Set<string>();
+
+  const walk = (node: unknown, path: string) => {
+    if (Array.isArray(node)) {
+      node.forEach((item, index) => walk(item, `${path}[${index}]`));
+      return;
+    }
+    if (!isObject(node)) {
+      return;
+    }
+
+    if (typeof node.type === "string" && ACTION_TYPES.has(node.type)) {
+      if (node.type === "tool" && typeof node.tool === "string") {
+        actions.add(`${path}: tool -> ${node.tool}`);
+      } else if (node.type === "state" && typeof node.binding === "string") {
+        actions.add(`${path}: state -> ${node.binding}`);
+      } else if (node.type === "resource" && typeof node.uri === "string") {
+        actions.add(`${path}: resource -> ${node.uri}`);
+      } else {
+        actions.add(`${path}: ${node.type}`);
+      }
+      return;
+    }
+
+    for (const [key, value] of Object.entries(node)) {
+      walk(value, path ? `${path}.${key}` : key);
+    }
+  };
+
+  walk(definition, "page");
+  return Array.from(actions).sort();
+}
+
+function collectBindingSummary(definition: JsonObject): string[] {
+  const bindings = new Set<string>();
+
+  const walk = (node: unknown) => {
+    if (Array.isArray(node)) {
+      node.forEach(walk);
+      return;
+    }
+    if (!isObject(node)) {
+      return;
+    }
+
+    for (const [key, value] of Object.entries(node)) {
+      if (key === "binding" && typeof value === "string" && value.trim().length > 0) {
+        bindings.add(value);
+      } else if (
+        typeof value === "string"
+        && value.includes("{{")
+        && value.includes("}}")
+      ) {
+        bindings.add(value);
+      } else {
+        walk(value);
+      }
+    }
+  };
+
+  walk(definition);
+  return Array.from(bindings).sort();
+}
+
+export function explainPageDefinition(definition: JsonObject): ExplainPageResult {
+  const validation = validatePageDefinition(definition);
+  const normalizedDefinition = validation.normalizedDefinition;
+  const structure = <string>[];
+  if (isObject(normalizedDefinition.content)) {
+    summarizeNode(normalizedDefinition.content, 0, structure);
+  }
+
+  const actionSummary = collectPageActionSummary(normalizedDefinition);
+  const bindingSummary = collectBindingSummary(normalizedDefinition);
+  const pageType = inferPageTypeFromDefinition(normalizedDefinition);
+  const warnings = validation.warnings.map((warning) => `${warning.path}: ${warning.message}`);
+
+  return {
+    summary: `This ${pageType} page contains ${validation.usedComponents.length} component types, ${actionSummary.length} action path(s), and ${bindingSummary.length} binding reference(s).`,
+    pageType,
+    structure,
+    usedComponents: validation.usedComponents,
+    actionSummary,
+    bindingSummary,
+    warnings,
+  };
 }
 
 function stateAction(binding: string, action: string, value: unknown): JsonObject {

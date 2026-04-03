@@ -194,6 +194,28 @@ export function createMcpUiServer(options: {
   );
 
   server.registerTool(
+    "explain_page",
+    {
+      title: "Explain page DSL",
+      description:
+        "Explain the structure, components, actions, and bindings of a page definition.",
+      inputSchema: {
+        definition: z.record(z.string(), z.unknown()),
+      },
+    },
+    async ({ definition }) => {
+      const result = await options.toolService.explainPage({
+        definition,
+      });
+
+      return {
+        content: [asTextBlock(result)],
+        structuredContent: result,
+      };
+    },
+  );
+
+  server.registerTool(
     "update_page_by_instruction",
     {
       title: "Update page by instruction",

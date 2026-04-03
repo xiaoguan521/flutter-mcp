@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  explainPageDefinition,
   generatePageFromPrompt,
   updatePageByInstruction,
   validatePageDefinition,
@@ -203,4 +204,63 @@ test("validatePageDefinition accepts Sprint 1 expanded form and search component
   assert.ok(result.usedComponents.includes("input"));
   assert.ok(result.usedComponents.includes("textarea"));
   assert.ok(result.usedComponents.includes("searchBar"));
+});
+
+test("explainPageDefinition summarizes structure, actions, and bindings", () => {
+  const explanation = explainPageDefinition({
+    type: "page",
+    title: "Customer Queue",
+    state: {
+      initial: {
+        filters: {
+          keyword: "",
+        },
+        rows: [],
+      },
+    },
+    content: {
+      type: "linear",
+      direction: "vertical",
+      children: [
+        {
+          type: "searchBar",
+          label: "Search",
+          binding: "app.filters.keyword",
+          searchAction: {
+            type: "state",
+            action: "set",
+            binding: "app.statusText",
+            value: "Filters applied",
+          },
+        },
+        {
+          type: "antdSection",
+          title: "Actions",
+          child: {
+            type: "linear",
+            direction: "horizontal",
+            children: [
+              {
+                type: "button",
+                label: "Save page",
+                click: {
+                  type: "tool",
+                  tool: "persistPage",
+                  params: {},
+                },
+              },
+            ],
+          },
+        },
+      ],
+    },
+  });
+
+  assert.equal(explanation.pageType, "table-list");
+  assert.ok(explanation.summary.length > 0);
+  assert.ok(explanation.structure.some((line) => line.includes("searchBar")));
+  assert.ok(explanation.actionSummary.some((line) => line.includes("persistPage")));
+  assert.ok(explanation.actionSummary.some((line) => line.includes("app.statusText")));
+  assert.ok(explanation.bindingSummary.includes("app.filters.keyword"));
+  assert.ok(explanation.usedComponents.includes("button"));
 });

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../core/models/page_models.dart';
@@ -303,6 +304,7 @@ class _StudioHomePageState extends State<StudioHomePage> {
   Widget _buildPreviewPanel(StudioController controller) {
     final document = controller.currentDocument;
     final generation = controller.lastGeneration;
+    final explanation = controller.lastExplanation;
     final update = controller.lastInstructionUpdate;
     final validation = controller.validationResult;
     return _panel(
@@ -339,6 +341,7 @@ class _StudioHomePageState extends State<StudioHomePage> {
             ),
           // -- AI 生成摘要 --
           if (generation != null) _buildGenerationSummary(generation),
+          if (explanation != null) _buildExplanationSummary(explanation),
           if (update != null) _buildInstructionSummary(update),
           const SizedBox(height: 16),
           Expanded(
@@ -432,6 +435,103 @@ class _StudioHomePageState extends State<StudioHomePage> {
                   warning,
                   style:
                       const TextStyle(color: Color(0xFF92400E), fontSize: 11),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildExplanationSummary(PageExplanationResultModel explanation) {
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFBEB),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFFDE68A)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: const <Widget>[
+              Icon(Icons.tips_and_updates_outlined,
+                  size: 16, color: Color(0xFFD97706)),
+              SizedBox(width: 6),
+              Text(
+                '页面解释',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF92400E),
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            explanation.summary,
+            style: const TextStyle(
+              color: Color(0xFF78350F),
+              fontSize: 12,
+              height: 1.5,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '页面类型：${explanation.pageType}',
+            style: const TextStyle(
+              color: Color(0xFF92400E),
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          if (explanation.structure.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            const Text(
+              '结构概览',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF92400E),
+                fontSize: 12,
+              ),
+            ),
+            const SizedBox(height: 4),
+            ...explanation.structure.take(6).map(
+              (item) => Text(
+                item,
+                style: const TextStyle(
+                  color: Color(0xFF78350F),
+                  fontSize: 11,
+                  height: 1.4,
+                ),
+              ),
+            ),
+          ],
+          if (explanation.actionSummary.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            const Text(
+              '动作摘要',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF92400E),
+                fontSize: 12,
+              ),
+            ),
+            const SizedBox(height: 4),
+            ...explanation.actionSummary.take(4).map(
+              (item) => Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: Text(
+                  '· $item',
+                  style: const TextStyle(
+                    color: Color(0xFF78350F),
+                    fontSize: 11,
+                    height: 1.4,
+                  ),
                 ),
               ),
             ),
@@ -953,8 +1053,83 @@ class _StudioHomePageState extends State<StudioHomePage> {
             label: Text(controller.isApplyingInstruction ? '修改中…' : '应用 AI 修改'),
           ),
         ),
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          height: 36,
+          child: OutlinedButton.icon(
+            onPressed: controller.isExplaining || controller.currentDocument == null
+                ? null
+                : () {
+                    controller.explainCurrentPage();
+                  },
+            icon: controller.isExplaining
+                ? const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.tips_and_updates_outlined, size: 16),
+            label: Text(controller.isExplaining ? '解释中…' : '解释当前页'),
+          ),
+        ),
+        if (controller.lastExplanation != null) ...[
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: () async {
+                await Clipboard.setData(
+                  ClipboardData(
+                    text: _buildExplanationClipboardText(controller.lastExplanation!),
+                  ),
+                );
+                if (!mounted) {
+                  return;
+                }
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('页面解释已复制到剪贴板')),
+                );
+              },
+              icon: const Icon(Icons.copy_all_rounded, size: 16),
+              label: const Text('复制解释'),
+            ),
+          ),
+        ],
       ],
     );
+  }
+
+  String _buildExplanationClipboardText(PageExplanationResultModel explanation) {
+    final buffer = StringBuffer()
+      ..writeln('页面解释')
+      ..writeln('页面类型：${explanation.pageType}')
+      ..writeln('摘要：${explanation.summary}');
+    if (explanation.structure.isNotEmpty) {
+      buffer.writeln('结构：');
+      for (final line in explanation.structure) {
+        buffer.writeln(line);
+      }
+    }
+    if (explanation.actionSummary.isNotEmpty) {
+      buffer.writeln('动作：');
+      for (final item in explanation.actionSummary) {
+        buffer.writeln('- $item');
+      }
+    }
+    if (explanation.bindingSummary.isNotEmpty) {
+      buffer.writeln('绑定：');
+      for (final item in explanation.bindingSummary) {
+        buffer.writeln('- $item');
+      }
+    }
+    if (explanation.warnings.isNotEmpty) {
+      buffer.writeln('警告：');
+      for (final item in explanation.warnings) {
+        buffer.writeln('- $item');
+      }
+    }
+    return buffer.toString().trimRight();
   }
 
   Widget _panel({required Widget child}) {
