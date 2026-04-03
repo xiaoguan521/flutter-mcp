@@ -15,6 +15,7 @@ class StudioHomePage extends StatefulWidget {
 class _StudioHomePageState extends State<StudioHomePage> {
   final TextEditingController _sourceController = TextEditingController();
   final TextEditingController _promptController = TextEditingController();
+  final TextEditingController _instructionController = TextEditingController();
   String _selectedPageType = 'dashboard';
   int _lastSourceRevision = -1;
 
@@ -22,6 +23,7 @@ class _StudioHomePageState extends State<StudioHomePage> {
   void dispose() {
     _sourceController.dispose();
     _promptController.dispose();
+    _instructionController.dispose();
     super.dispose();
   }
 
@@ -80,9 +82,10 @@ class _StudioHomePageState extends State<StudioHomePage> {
               ),
               const SizedBox(width: 8),
               FilledButton(
-                onPressed: controller.currentDocument == null || controller.isSaving
-                    ? null
-                    : () => controller.persistCurrentPage(),
+                onPressed:
+                    controller.currentDocument == null || controller.isSaving
+                        ? null
+                        : () => controller.persistCurrentPage(),
                 style: FilledButton.styleFrom(
                   backgroundColor: const Color(0xFF0F766E),
                 ),
@@ -300,6 +303,7 @@ class _StudioHomePageState extends State<StudioHomePage> {
   Widget _buildPreviewPanel(StudioController controller) {
     final document = controller.currentDocument;
     final generation = controller.lastGeneration;
+    final update = controller.lastInstructionUpdate;
     final validation = controller.validationResult;
     return _panel(
       child: Column(
@@ -335,6 +339,7 @@ class _StudioHomePageState extends State<StudioHomePage> {
             ),
           // -- AI 生成摘要 --
           if (generation != null) _buildGenerationSummary(generation),
+          if (update != null) _buildInstructionSummary(update),
           const SizedBox(height: 16),
           Expanded(
             child: Container(
@@ -361,6 +366,81 @@ class _StudioHomePageState extends State<StudioHomePage> {
     );
   }
 
+  Widget _buildInstructionSummary(PageUpdateResultModel update) {
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFF6FF),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFBFDBFE)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: const <Widget>[
+              Icon(Icons.auto_fix_high_rounded,
+                  size: 16, color: Color(0xFF2563EB)),
+              SizedBox(width: 6),
+              Text(
+                'AI 二次修改',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF1D4ED8),
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            update.summary,
+            style: const TextStyle(
+                color: Color(0xFF1E3A8A), fontSize: 12, height: 1.5),
+          ),
+          if (update.appliedChanges.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            const Text(
+              '已应用修改',
+              style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1D4ED8),
+                  fontSize: 12),
+            ),
+            const SizedBox(height: 4),
+            ...update.appliedChanges.map(
+              (item) => Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: Text('· $item',
+                    style: const TextStyle(
+                        color: Color(0xFF1E3A8A), fontSize: 11, height: 1.4)),
+              ),
+            ),
+          ],
+          if (update.warnings.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            ...update.warnings.map(
+              (warning) => Container(
+                margin: const EdgeInsets.only(top: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF3C7),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  warning,
+                  style:
+                      const TextStyle(color: Color(0xFF92400E), fontSize: 11),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildGenerationSummary(GeneratedPageResultModel generation) {
     return Container(
       margin: const EdgeInsets.only(top: 12),
@@ -375,7 +455,8 @@ class _StudioHomePageState extends State<StudioHomePage> {
         children: <Widget>[
           Row(
             children: <Widget>[
-              const Icon(Icons.auto_awesome, size: 16, color: Color(0xFF059669)),
+              const Icon(Icons.auto_awesome,
+                  size: 16, color: Color(0xFF059669)),
               const SizedBox(width: 6),
               Text(
                 'AI 生成 · ${generation.pageType}',
@@ -390,19 +471,25 @@ class _StudioHomePageState extends State<StudioHomePage> {
           const SizedBox(height: 6),
           Text(
             generation.summary,
-            style: const TextStyle(color: Color(0xFF064E3B), fontSize: 12, height: 1.5),
+            style: const TextStyle(
+                color: Color(0xFF064E3B), fontSize: 12, height: 1.5),
           ),
           if (generation.assumptions.isNotEmpty) ...[
             const SizedBox(height: 8),
             const Text(
               'AI 假设',
-              style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF065F46), fontSize: 12),
+              style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF065F46),
+                  fontSize: 12),
             ),
             const SizedBox(height: 4),
             ...generation.assumptions.map(
               (a) => Padding(
                 padding: const EdgeInsets.only(left: 8),
-                child: Text('· $a', style: const TextStyle(color: Color(0xFF064E3B), fontSize: 11, height: 1.4)),
+                child: Text('· $a',
+                    style: const TextStyle(
+                        color: Color(0xFF064E3B), fontSize: 11, height: 1.4)),
               ),
             ),
           ],
@@ -416,7 +503,9 @@ class _StudioHomePageState extends State<StudioHomePage> {
                   color: const Color(0xFFFEF3C7),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Text(w, style: const TextStyle(color: Color(0xFF92400E), fontSize: 11)),
+                child: Text(w,
+                    style: const TextStyle(
+                        color: Color(0xFF92400E), fontSize: 11)),
               ),
             ),
           ],
@@ -431,11 +520,15 @@ class _StudioHomePageState extends State<StudioHomePage> {
         padding: const EdgeInsets.only(top: 10),
         child: Row(
           children: const <Widget>[
-            Icon(Icons.check_circle_outline, size: 16, color: Color(0xFF059669)),
+            Icon(Icons.check_circle_outline,
+                size: 16, color: Color(0xFF059669)),
             SizedBox(width: 6),
             Text(
               '页面结构校验通过',
-              style: TextStyle(color: Color(0xFF059669), fontSize: 12, fontWeight: FontWeight.w600),
+              style: TextStyle(
+                  color: Color(0xFF059669),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600),
             ),
           ],
         ),
@@ -446,10 +539,14 @@ class _StudioHomePageState extends State<StudioHomePage> {
       margin: const EdgeInsets.only(top: 10),
       constraints: const BoxConstraints(maxHeight: 160),
       decoration: BoxDecoration(
-        color: validation.valid ? const Color(0xFFFFFBEB) : const Color(0xFFFEF2F2),
+        color: validation.valid
+            ? const Color(0xFFFFFBEB)
+            : const Color(0xFFFEF2F2),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: validation.valid ? const Color(0xFFFDE68A) : const Color(0xFFFECACA),
+          color: validation.valid
+              ? const Color(0xFFFDE68A)
+              : const Color(0xFFFECACA),
         ),
       ),
       child: ListView(
@@ -461,7 +558,8 @@ class _StudioHomePageState extends State<StudioHomePage> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  const Icon(Icons.error_outline, size: 14, color: Color(0xFFDC2626)),
+                  const Icon(Icons.error_outline,
+                      size: 14, color: Color(0xFFDC2626)),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Column(
@@ -469,12 +567,16 @@ class _StudioHomePageState extends State<StudioHomePage> {
                       children: <Widget>[
                         Text(
                           '${e.path}: ${e.message}',
-                          style: const TextStyle(color: Color(0xFFB91C1C), fontSize: 11, fontWeight: FontWeight.w600),
+                          style: const TextStyle(
+                              color: Color(0xFFB91C1C),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600),
                         ),
                         if (e.suggestion != null)
                           Text(
                             e.suggestion!,
-                            style: const TextStyle(color: Color(0xFF92400E), fontSize: 11),
+                            style: const TextStyle(
+                                color: Color(0xFF92400E), fontSize: 11),
                           ),
                       ],
                     ),
@@ -489,7 +591,8 @@ class _StudioHomePageState extends State<StudioHomePage> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  const Icon(Icons.warning_amber_rounded, size: 14, color: Color(0xFFD97706)),
+                  const Icon(Icons.warning_amber_rounded,
+                      size: 14, color: Color(0xFFD97706)),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Column(
@@ -497,12 +600,16 @@ class _StudioHomePageState extends State<StudioHomePage> {
                       children: <Widget>[
                         Text(
                           '${w.path}: ${w.message}',
-                          style: const TextStyle(color: Color(0xFF92400E), fontSize: 11, fontWeight: FontWeight.w600),
+                          style: const TextStyle(
+                              color: Color(0xFF92400E),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600),
                         ),
                         if (w.suggestion != null)
                           Text(
                             w.suggestion!,
-                            style: const TextStyle(color: Color(0xFF78716C), fontSize: 11),
+                            style: const TextStyle(
+                                color: Color(0xFF78716C), fontSize: 11),
                           ),
                       ],
                     ),
@@ -587,7 +694,8 @@ class _StudioHomePageState extends State<StudioHomePage> {
               itemBuilder: (context, index) {
                 final block = controller.contentBlocks[index];
                 return Card(
-                  key: ValueKey('${block['metaId'] ?? block['title'] ?? index}'),
+                  key:
+                      ValueKey('${block['metaId'] ?? block['title'] ?? index}'),
                   elevation: 0,
                   color: const Color(0xFFF8FAFC),
                   child: ListTile(
@@ -709,7 +817,8 @@ class _StudioHomePageState extends State<StudioHomePage> {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(color: Color(0xFF7C3AED), width: 1.5),
+              borderSide:
+                  const BorderSide(color: Color(0xFF7C3AED), width: 1.5),
             ),
             contentPadding: const EdgeInsets.all(12),
           ),
@@ -730,11 +839,14 @@ class _StudioHomePageState extends State<StudioHomePage> {
                 child: DropdownButton<String>(
                   value: _selectedPageType,
                   isDense: true,
-                  style: const TextStyle(fontSize: 13, color: Color(0xFF334155)),
+                  style:
+                      const TextStyle(fontSize: 13, color: Color(0xFF334155)),
                   items: const <DropdownMenuItem<String>>[
-                    DropdownMenuItem(value: 'dashboard', child: Text('Dashboard')),
+                    DropdownMenuItem(
+                        value: 'dashboard', child: Text('Dashboard')),
                     DropdownMenuItem(value: 'form', child: Text('Form')),
-                    DropdownMenuItem(value: 'table-list', child: Text('Table / List')),
+                    DropdownMenuItem(
+                        value: 'table-list', child: Text('Table / List')),
                   ],
                   onChanged: (value) {
                     if (value != null) {
@@ -775,6 +887,71 @@ class _StudioHomePageState extends State<StudioHomePage> {
               ),
             ),
           ],
+        ),
+        const SizedBox(height: 14),
+        const Text(
+          'AI 二次修改',
+          style: TextStyle(
+            fontWeight: FontWeight.w700,
+            fontSize: 14,
+            color: Color(0xFF0F172A),
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _instructionController,
+          maxLines: 2,
+          minLines: 1,
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: const Color(0xFFF8FAFC),
+            hintText: '基于当前页面继续修改，如：增加搜索筛选和操作按钮，并把标题改成客户运营看板',
+            hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide:
+                  const BorderSide(color: Color(0xFF2563EB), width: 1.5),
+            ),
+            contentPadding: const EdgeInsets.all(12),
+          ),
+          style: const TextStyle(fontSize: 13, height: 1.4),
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          height: 36,
+          child: FilledButton.icon(
+            onPressed: controller.isApplyingInstruction ||
+                    controller.currentDocument == null
+                ? null
+                : () {
+                    controller.updateCurrentPageByInstruction(
+                      instruction: _instructionController.text,
+                    );
+                  },
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF2563EB),
+            ),
+            icon: controller.isApplyingInstruction
+                ? const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(Icons.auto_fix_high_rounded, size: 16),
+            label: Text(controller.isApplyingInstruction ? '修改中…' : '应用 AI 修改'),
+          ),
         ),
       ],
     );

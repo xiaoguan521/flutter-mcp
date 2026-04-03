@@ -24,88 +24,83 @@
       "gap": 16,
       "children": [
         {
-          "type": "antdSection",
+          "type": "form",
           "title": "审批表单",
           "subtitle": "表单值实时写回状态树，人工可继续在编辑器中改 JSON。",
-          "child": {
-            "type": "linear",
-            "direction": "vertical",
-            "gap": 12,
-            "children": [
-              {
-                "type": "textInput",
-                "label": "流程名称",
-                "binding": "app.form.name",
-                "placeholder": "请输入流程名称"
-              },
-              {
-                "type": "textInput",
-                "label": "负责人",
-                "binding": "app.form.owner",
-                "placeholder": "请输入负责人"
-              },
-              {
-                "type": "select",
-                "label": "优先级",
-                "binding": "app.form.priority",
-                "items": [
-                  {
-                    "value": "low",
-                    "label": "低"
-                  },
-                  {
-                    "value": "medium",
-                    "label": "中"
-                  },
-                  {
-                    "value": "high",
-                    "label": "高"
-                  }
-                ]
-              },
-              {
-                "type": "numberField",
-                "label": "预算",
-                "value": {
-                  "binding": "app.form.budget"
+          "children": [
+            {
+              "type": "input",
+              "label": "流程名称",
+              "binding": "app.form.name",
+              "placeholder": "请输入流程名称"
+            },
+            {
+              "type": "input",
+              "label": "负责人",
+              "binding": "app.form.owner",
+              "placeholder": "请输入负责人"
+            },
+            {
+              "type": "select",
+              "label": "优先级",
+              "binding": "app.form.priority",
+              "items": [
+                {
+                  "value": "low",
+                  "label": "低"
                 },
-                "prefix": "¥ ",
-                "step": 1000,
-                "change": {
-                  "type": "state",
-                  "action": "set",
-                  "binding": "app.form.budget",
-                  "value": "{{event.value}}"
+                {
+                  "value": "medium",
+                  "label": "中"
+                },
+                {
+                  "value": "high",
+                  "label": "高"
                 }
+              ]
+            },
+            {
+              "type": "numberField",
+              "label": "预算",
+              "value": {
+                "binding": "app.form.budget"
               },
-              {
-                "type": "select",
-                "label": "通知渠道",
-                "binding": "app.form.channel",
-                "items": [
-                  {
-                    "value": "email",
-                    "label": "邮件"
-                  },
-                  {
-                    "value": "wechat",
-                    "label": "企业微信"
-                  },
-                  {
-                    "value": "sms",
-                    "label": "短信"
-                  }
-                ]
-              },
-              {
-                "type": "textInput",
-                "label": "补充说明",
-                "binding": "app.form.memo",
-                "maxLines": 4,
-                "placeholder": "请输入补充说明"
+              "prefix": "¥ ",
+              "step": 1000,
+              "change": {
+                "type": "state",
+                "action": "set",
+                "binding": "app.form.budget",
+                "value": "{{event.value}}"
               }
-            ]
-          }
+            },
+            {
+              "type": "select",
+              "label": "通知渠道",
+              "binding": "app.form.channel",
+              "items": [
+                {
+                  "value": "email",
+                  "label": "邮件"
+                },
+                {
+                  "value": "wechat",
+                  "label": "企业微信"
+                },
+                {
+                  "value": "sms",
+                  "label": "短信"
+                }
+              ]
+            },
+            {
+              "type": "textarea",
+              "label": "补充说明",
+              "binding": "app.form.memo",
+              "maxLines": 4,
+              "placeholder": "请输入补充说明"
+            }
+          ]
         },
         {
           "type": "antdSection",
@@ -151,4 +146,3 @@
     }
   }
 }
-

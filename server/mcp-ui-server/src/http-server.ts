@@ -246,6 +246,29 @@ export function createHttpServer(options: {
             result,
           });
         }
+        case "update_page_by_instruction": {
+          if (!payload.definition || typeof payload.definition !== "object") {
+            return jsonError(res, 400, "update_page_by_instruction requires definition.");
+          }
+          if (typeof payload.instruction !== "string" || payload.instruction.trim().length === 0) {
+            return jsonError(
+              res,
+              400,
+              "update_page_by_instruction requires instruction.",
+            );
+          }
+
+          const result = await options.toolService.updatePageByInstruction({
+            definition: payload.definition as Record<string, unknown>,
+            instruction: payload.instruction,
+            locale: typeof payload.locale === "string" ? payload.locale : undefined,
+          });
+
+          return res.json({
+            success: true,
+            result,
+          });
+        }
         case "list_components": {
           const result = await options.toolService.listComponents({
             category:

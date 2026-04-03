@@ -5,6 +5,8 @@ import type {
   GeneratedPageResult,
   JsonObject,
   ListComponentsInput,
+  UpdatePageByInstructionInput,
+  UpdatePageByInstructionResult,
   ValidatePageResult,
   ValidationIssue,
 } from "./types.js";
@@ -142,6 +144,260 @@ function resolveSlug(
 
   const slugBase = generatedSlugBase(prompt, title, pageType);
   return `ai-${slugBase}-${randomUUID().slice(0, 8)}`;
+}
+
+function ensureStateInitial(definition: JsonObject): JsonObject {
+  const state = isObject(definition.state)
+    ? definition.state
+    : ((definition.state = {}) as JsonObject);
+  return isObject(state.initial)
+    ? state.initial
+    : ((state.initial = {}) as JsonObject);
+}
+
+function ensureLinearRoot(definition: JsonObject): JsonObject {
+  const content = definition.content;
+  if (isObject(content) && content.type === "linear") {
+    if (typeof content.direction !== "string") {
+      content.direction = "vertical";
+    }
+    if (typeof content.gap !== "number") {
+      content.gap = 16;
+    }
+    if (!Array.isArray(content.children)) {
+      content.children = [];
+    }
+    return content;
+  }
+
+  definition.content = {
+    type: "linear",
+    direction: "vertical",
+    gap: 16,
+    children: isObject(content) ? [content] : [],
+  };
+  return definition.content as JsonObject;
+}
+
+function appendRootChild(definition: JsonObject, child: JsonObject): void {
+  const root = ensureLinearRoot(definition);
+  const children = root.children as unknown[];
+  children.push(child);
+}
+
+function extractRequestedTitle(instruction: string): string | null {
+  const patterns = [
+    /(?:页面标题|标题)\s*(?:改成|改为|设为|叫做)\s*[“"]?([^"”，,\n。；;]+)[”"]?/i,
+    /(?:rename\s+(?:the\s+)?)?title\s*(?:to|as|:)\s*[“"]?([^"”,\n.;]+)[”"]?/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = instruction.match(pattern);
+    const title = match?.[1]?.trim();
+    if (title) {
+      return title;
+    }
+  }
+
+  if (/(?:标题|title)/i.test(instruction)) {
+    const quoted = instruction.match(/[“"]([^"”]{2,48})[”"]/);
+    if (quoted?.[1]) {
+      return quoted[1].trim();
+    }
+  }
+
+  return null;
+}
+
+function buildKpiSection(title: string): JsonObject {
+  return {
+    type: "antdSection",
+    title,
+    subtitle: "Added from AI refinement instruction.",
+    child: {
+      type: "linear",
+      direction: "horizontal",
+      gap: 12,
+      wrap: true,
+      children: [
+        { type: "antdStat", title: "Completion", value: "84", suffix: "%", trend: "+6%", tone: "teal" },
+        { type: "antdStat", title: "Backlog", value: "18", trend: "-3", tone: "amber" },
+        { type: "antdStat", title: "Owner Coverage", value: "12", trend: "Stable", tone: "blue" },
+      ],
+    },
+  };
+}
+
+function buildFilterSection(title: string): JsonObject {
+  return {
+    type: "antdSection",
+    title,
+    subtitle: "Search and filter controls generated from the refinement request.",
+    child: {
+      type: "searchBar",
+      label: "Search",
+      binding: "app.filters.keyword",
+      placeholder: "Enter keyword",
+      buttonLabel: "Apply Filters",
+      searchAction: stateAction("app.statusText", "set", "Filters updated"),
+      filters: [
+        {
+          type: "select",
+          label: "Status",
+          binding: "app.filters.status",
+          items: [
+            { value: "all", label: "All" },
+            { value: "healthy", label: "Healthy" },
+            { value: "watch", label: "Watch" },
+            { value: "degraded", label: "Degraded" },
+          ],
+        },
+      ],
+    },
+  };
+}
+
+function buildTableSection(title: string): JsonObject {
+  return {
+    type: "antdSection",
+    title,
+    subtitle: "Generated table block from the refinement request.",
+    child: {
+      type: "antdTable",
+      columns: [
+        { key: "name", title: "Name" },
+        { key: "owner", title: "Owner" },
+        { key: "status", title: "Status" },
+      ],
+      rows: [
+        { name: "Pending review", owner: "Ops", status: "watch" },
+        { name: "Ready to publish", owner: "Studio", status: "healthy" },
+        { name: "Needs follow-up", owner: "Product", status: "degraded" },
+      ],
+    },
+  };
+}
+
+function buildFormSection(title: string): JsonObject {
+  return {
+    type: "form",
+    title,
+    subtitle: "Generated form fields from the refinement instruction.",
+    children: [
+      {
+        type: "input",
+        label: "Request Name",
+        binding: "app.form.requestName",
+        placeholder: "Enter request name",
+      },
+      {
+        type: "select",
+        label: "Priority",
+        binding: "app.form.priority",
+        items: [
+          { value: "low", label: "Low" },
+          { value: "medium", label: "Medium" },
+          { value: "high", label: "High" },
+        ],
+      },
+      {
+        type: "numberField",
+        label: "Budget",
+        value: { binding: "app.form.budget" },
+        prefix: "$ ",
+        step: 1000,
+        change: stateAction("app.form.budget", "set", "{{event.value}}"),
+      },
+      {
+        type: "textarea",
+        label: "Notes",
+        binding: "app.form.notes",
+        placeholder: "Enter supporting notes",
+        maxLines: 4,
+      },
+    ],
+  };
+}
+
+function normalizeFormField(field: JsonObject): JsonObject {
+  if (field.type !== "textInput") {
+    return field;
+  }
+
+  return {
+    ...field,
+    type: typeof field.maxLines === "number" && field.maxLines > 1
+      ? "textarea"
+      : "input",
+  };
+}
+
+function buildToolbarSection(title: string): JsonObject {
+  return {
+    type: "antdSection",
+    title,
+    subtitle: "Action shortcuts added during AI refinement.",
+    child: {
+      type: "linear",
+      direction: "horizontal",
+      gap: 12,
+      wrap: true,
+      children: [
+        {
+          type: "button",
+          label: "Mark Ready",
+          variant: "outlined",
+          click: stateAction("app.statusText", "set", "Ready after AI update"),
+        },
+        {
+          type: "button",
+          label: "Save Page",
+          variant: "filled",
+          backgroundColor: "#0f766e",
+          click: persistAction(),
+        },
+      ],
+    },
+  };
+}
+
+function buildNoteSection(title: string, instruction: string): JsonObject {
+  return {
+    type: "antdSection",
+    title,
+    subtitle: "Fallback note added because the instruction needs manual follow-up.",
+    child: {
+      type: "text",
+      content: `Follow-up requested: ${promptSnippet(instruction)}`,
+    },
+  };
+}
+
+function addInstructionWarnings(instruction: string, warnings: string[]): void {
+  const rules = [
+    {
+      pattern: /分页|pagination/i,
+      message: "Pagination is not modeled in Sprint 1 yet; please wire it manually later.",
+    },
+    {
+      pattern: /图表|chart/i,
+      message: "Chart components are outside the current Sprint 1 whitelist.",
+    },
+    {
+      pattern: /详情|跳转|detail|navigate/i,
+      message: "Navigation/detail flows are not auto-generated in this updater yet.",
+    },
+    {
+      pattern: /modal|drawer|弹窗/i,
+      message: "Modal and drawer components are not auto-generated in Sprint 1 updates.",
+    },
+  ];
+
+  for (const rule of rules) {
+    if (rule.pattern.test(instruction) && !warnings.includes(rule.message)) {
+      warnings.push(rule.message);
+    }
+  }
 }
 
 function stateAction(binding: string, action: string, value: unknown): JsonObject {
@@ -310,6 +566,7 @@ function formPreset(
   };
 
   const preset = fieldsByScenario[scenario];
+  const normalizedFields = preset.fields.map((field) => normalizeFormField(field));
   return {
     description: `AI generated form draft for "${promptSnippet(prompt)}".`,
     definition: {
@@ -321,7 +578,7 @@ function formPreset(
         direction: "vertical",
         gap: 16,
         children: [
-          { type: "antdSection", title: `${title} Intake`, subtitle: `Generated from: ${promptSnippet(prompt)}`, child: { type: "linear", direction: "vertical", gap: 12, children: preset.fields } },
+          { type: "form", title: `${title} Intake`, subtitle: `Generated from: ${promptSnippet(prompt)}`, children: normalizedFields },
           { type: "antdSection", title: "Actions", subtitle: "Current status: {{app.statusText}}", child: { type: "linear", direction: "horizontal", gap: 12, wrap: true, children: [{ type: "button", label: "Submit", variant: "outlined", click: stateAction("app.statusText", "set", "Submitted for review") }, { type: "button", label: "Save draft", variant: "filled", backgroundColor: "#0f766e", click: persistAction() }] } },
         ],
       },
@@ -349,12 +606,13 @@ function tablePreset(
     definition: {
       type: "page",
       title,
-      state: { initial: { rows: preset.rows, statusText: preset.statusText } },
+      state: { initial: { rows: preset.rows, statusText: preset.statusText, filters: { keyword: "", status: "all" } } },
       content: {
         type: "linear",
         direction: "vertical",
         gap: 16,
         children: [
+          { type: "searchBar", label: "Search", binding: "app.filters.keyword", placeholder: "Search rows by keyword", buttonLabel: "Apply", searchAction: stateAction("app.statusText", "set", "Filters applied"), filters: [{ type: "select", label: "Status", binding: "app.filters.status", items: [{ value: "all", label: "All" }, { value: "healthy", label: "Healthy" }, { value: "watch", label: "Watch" }, { value: "degraded", label: "Degraded" }] }] },
           { type: "antdSection", title: `${title} Overview`, subtitle: `Generated from: ${promptSnippet(prompt)}`, child: { type: "antdTable", columns: preset.columns, rows: { binding: "app.rows" } } },
           { type: "antdSection", title: "Actions", subtitle: "{{app.statusText}}", child: { type: "linear", direction: "horizontal", gap: 12, wrap: true, children: [{ type: "button", label: "Mark reviewed", variant: "outlined", click: stateAction("app.statusText", "set", "Checked by reviewer") }, { type: "button", label: "Save page", variant: "filled", backgroundColor: "#0f766e", click: persistAction() }] } },
         ],
@@ -398,7 +656,11 @@ export const COMPONENT_CATALOG: ComponentCatalogItem[] = [
   { name: "select", category: "data-entry", description: "Selectable dropdown bound to state.", recommendedForAi: true, props: [{ name: "label", type: "string", required: true, description: "Field label." }, { name: "binding", type: "string", required: true, description: "State binding path." }, { name: "items", type: "array", required: true, description: "Options." }], sample: { type: "select", label: "Priority", binding: "app.form.priority", items: [{ value: "low", label: "Low" }, { value: "high", label: "High" }] } },
   { name: "text", category: "display", description: "Plain text block.", recommendedForAi: true, props: [{ name: "content", type: "string", required: true, description: "Display content." }], sample: { type: "text", content: "Helpful note for the operator." } },
   { name: "textInput", category: "data-entry", description: "Bound text input field.", recommendedForAi: true, props: [{ name: "label", type: "string", required: true, description: "Field label." }, { name: "binding", type: "string", required: true, description: "State binding path." }, { name: "placeholder", type: "string", description: "Input placeholder." }, { name: "maxLines", type: "number", description: "Optional multiline rows." }], sample: { type: "textInput", label: "Customer Name", binding: "app.form.customerName", placeholder: "Enter customer name" } },
+  { name: "input", category: "data-entry", description: "Alias of textInput for single-line forms.", recommendedForAi: true, props: [{ name: "label", type: "string", required: true, description: "Field label." }, { name: "binding", type: "string", required: true, description: "State binding path." }, { name: "placeholder", type: "string", description: "Input placeholder." }], sample: { type: "input", label: "Customer Name", binding: "app.form.customerName", placeholder: "Enter customer name" } },
+  { name: "textarea", category: "data-entry", description: "Multiline text input for notes or descriptions.", recommendedForAi: true, props: [{ name: "label", type: "string", required: true, description: "Field label." }, { name: "binding", type: "string", required: true, description: "State binding path." }, { name: "placeholder", type: "string", description: "Input placeholder." }, { name: "maxLines", type: "number", description: "Visible line count." }], sample: { type: "textarea", label: "Notes", binding: "app.form.notes", placeholder: "Enter supporting notes", maxLines: 4 } },
   { name: "numberField", category: "data-entry", description: "Numeric input with explicit change action.", recommendedForAi: true, props: [{ name: "label", type: "string", required: true, description: "Field label." }, { name: "value", type: "object", required: true, description: "Current bound value." }, { name: "change", type: "object", description: "State update action." }, { name: "step", type: "number", description: "Increment step." }], sample: { type: "numberField", label: "Budget", value: { binding: "app.form.budget" }, step: 1000, change: { type: "state", action: "set", binding: "app.form.budget", value: "{{event.value}}" } } },
+  { name: "form", category: "layout", description: "Structured form container for grouped data-entry fields.", recommendedForAi: true, props: [{ name: "title", type: "string", description: "Form title." }, { name: "subtitle", type: "string", description: "Form helper text." }, { name: "children", type: "array", description: "Nested fields in display order." }, { name: "child", type: "object", description: "Optional single nested layout node." }], sample: { type: "form", title: "Approval Form", subtitle: "Collect request details.", children: [{ type: "input", label: "Request Name", binding: "app.form.requestName" }, { type: "textarea", label: "Notes", binding: "app.form.notes", maxLines: 4 }] } },
+  { name: "searchBar", category: "data-entry", description: "Convenience search/filter container for list pages.", recommendedForAi: true, props: [{ name: "label", type: "string", description: "Keyword field label." }, { name: "binding", type: "string", required: true, description: "State binding path for the keyword." }, { name: "placeholder", type: "string", description: "Search placeholder." }, { name: "filters", type: "array", description: "Extra filter widgets appended after the search box." }, { name: "searchAction", type: "object", description: "Optional action fired by the search button." }], sample: { type: "searchBar", label: "Search Orders", binding: "app.filters.keyword", placeholder: "Search order no.", filters: [{ type: "select", label: "Status", binding: "app.filters.status", items: [{ value: "all", label: "All" }, { value: "healthy", label: "Healthy" }] }], searchAction: { type: "state", action: "set", binding: "app.statusText", value: "Filters updated" } } },
   { name: "antdSection", category: "display", description: "Card-style section container.", recommendedForAi: true, props: [{ name: "title", type: "string", required: true, description: "Section title." }, { name: "subtitle", type: "string", description: "Secondary description." }, { name: "child", type: "object", required: true, description: "Nested component." }], sample: { type: "antdSection", title: "Overview", subtitle: "Short context for the section.", child: { type: "text", content: "Section content" } } },
   { name: "antdStat", category: "display", description: "KPI card with value and trend.", recommendedForAi: true, props: [{ name: "title", type: "string", required: true, description: "Metric title." }, { name: "value", type: "string", required: true, description: "Metric value." }, { name: "suffix", type: "string", description: "Optional unit." }, { name: "trend", type: "string", description: "Trend label." }, { name: "tone", type: "string", description: "Visual accent tone." }], sample: { type: "antdStat", title: "Revenue", value: "4.8", suffix: "M", trend: "+18%", tone: "teal" } },
   { name: "antdTable", category: "data-display", description: "Antd-style table with columns and rows.", recommendedForAi: true, props: [{ name: "columns", type: "array", required: true, description: "Table columns." }, { name: "rows", type: "array|object", required: true, description: "Rows or binding." }], sample: { type: "antdTable", columns: [{ key: "name", title: "Name" }, { key: "status", title: "Status" }], rows: [{ name: "Order API", status: "healthy" }] } },
@@ -514,6 +776,16 @@ function validateComponent(node: unknown, path: string, context: ValidationConte
     return;
   }
 
+  if (type === "input" || type === "textarea") {
+    if (typeof node.label !== "string" || node.label.trim().length === 0) {
+      pushIssue(context.errors, `${path}.label`, `${type}.label is required.`);
+    }
+    if (typeof node.binding !== "string" || node.binding.trim().length === 0) {
+      pushIssue(context.errors, `${path}.binding`, `${type}.binding is required.`);
+    }
+    return;
+  }
+
   if (type === "numberField") {
     if (typeof node.label !== "string" || node.label.trim().length === 0) {
       pushIssue(context.errors, `${path}.label`, "numberField.label is required.");
@@ -523,6 +795,52 @@ function validateComponent(node: unknown, path: string, context: ValidationConte
     }
     if (node.change !== undefined) {
       validateAction(node.change, `${path}.change`, context);
+    }
+    return;
+  }
+
+  if (type === "form") {
+    const hasChild = isObject(node.child);
+    const hasChildren = Array.isArray(node.children) && node.children.length > 0;
+    if (!hasChild && !hasChildren) {
+      pushIssue(context.errors, path, "form requires child or children.");
+      return;
+    }
+    if (hasChild) {
+      validateComponent(node.child, `${path}.child`, context);
+    }
+    if (Array.isArray(node.children)) {
+      node.children.forEach((child, index) => {
+        validateComponent(child, `${path}.children[${index}]`, context);
+      });
+    }
+    return;
+  }
+
+  if (type === "searchBar") {
+    if (typeof node.binding !== "string" || node.binding.trim().length === 0) {
+      pushIssue(context.errors, `${path}.binding`, "searchBar.binding is required.");
+    }
+    if (node.filters !== undefined) {
+      if (!Array.isArray(node.filters)) {
+        pushIssue(context.errors, `${path}.filters`, "searchBar.filters must be an array.");
+      } else {
+        node.filters.forEach((filter, index) => {
+          validateComponent(filter, `${path}.filters[${index}]`, context);
+        });
+      }
+    }
+    if (node.actions !== undefined) {
+      if (!Array.isArray(node.actions)) {
+        pushIssue(context.errors, `${path}.actions`, "searchBar.actions must be an array.");
+      } else {
+        node.actions.forEach((actionNode, index) => {
+          validateComponent(actionNode, `${path}.actions[${index}]`, context);
+        });
+      }
+    }
+    if (node.searchAction !== undefined) {
+      validateAction(node.searchAction, `${path}.searchAction`, context);
     }
     return;
   }
@@ -675,5 +993,104 @@ export function generatePageFromPrompt(input: GeneratePageFromPromptInput): Gene
       ...(input.seedTemplate ? [`Used "${input.seedTemplate}" as a layout hint.`] : []),
       ...(input.locale ? [`Generated copy for locale "${input.locale}".`] : []),
     ],
+  };
+}
+
+export function updatePageByInstruction(
+  input: UpdatePageByInstructionInput,
+): UpdatePageByInstructionResult {
+  const instruction = input.instruction.trim();
+  if (!instruction) {
+    throw new Error("instruction is required.");
+  }
+
+  const baseValidation = validatePageDefinition(input.definition);
+  const updatedDefinition = cloneJson(baseValidation.normalizedDefinition);
+  const appliedChanges: string[] = [];
+  const warnings: string[] = [];
+
+  if (baseValidation.errors.length > 0) {
+    warnings.push(
+      "The source page had validation errors; the updater normalized the root before applying changes.",
+    );
+  }
+
+  const requestedTitle = extractRequestedTitle(instruction);
+  if (requestedTitle) {
+    updatedDefinition.title = requestedTitle;
+    appliedChanges.push(`Updated the page title to "${requestedTitle}".`);
+  }
+
+  addInstructionWarnings(instruction, warnings);
+
+  const initialState = ensureStateInitial(updatedDefinition);
+  const addSection = (section: JsonObject, summary: string) => {
+    appendRootChild(updatedDefinition, section);
+    appliedChanges.push(summary);
+  };
+
+  if (/(?:kpi|metric|stat|指标)/i.test(instruction)) {
+    addSection(buildKpiSection("KPI Highlights"), "Added a KPI highlights section.");
+  }
+
+  if (/(?:search|filter|筛选|搜索)/i.test(instruction)) {
+    initialState.filters = isObject(initialState.filters)
+      ? initialState.filters
+      : { keyword: "", status: "all" };
+    initialState.statusText = typeof initialState.statusText === "string"
+      ? initialState.statusText
+      : "Filters ready";
+    addSection(buildFilterSection("Query Filters"), "Added search and status filter controls.");
+  }
+
+  if (/(?:table|list|grid|queue|表格|列表|清单)/i.test(instruction)) {
+    addSection(buildTableSection("Generated Table Block"), "Added a data table section.");
+  }
+
+  if (/(?:form|field|input|表单|字段|录入)/i.test(instruction)) {
+    initialState.form = isObject(initialState.form)
+      ? initialState.form
+      : { requestName: "", priority: "medium", budget: 0 };
+    addSection(buildFormSection("Generated Form Block"), "Added a form input section.");
+  }
+
+  if (/(?:action|button|toolbar|操作|按钮)/i.test(instruction)) {
+    initialState.statusText = typeof initialState.statusText === "string"
+      ? initialState.statusText
+      : "Ready";
+    addSection(buildToolbarSection("Action Bar"), "Added an action toolbar section.");
+  }
+
+  if (/(?:note|summary|说明|备注|描述)/i.test(instruction)) {
+    addSection(buildNoteSection("Instruction Notes", instruction), "Added a note section.");
+  }
+
+  if (appliedChanges.length === 0) {
+    addSection(
+      buildNoteSection("AI Follow-up Needed", instruction),
+      "Captured the instruction as a follow-up note for manual refinement.",
+    );
+    warnings.push(
+      "The instruction could not be mapped to a structured Sprint 1 edit, so a note block was added instead.",
+    );
+  }
+
+  const validation = validatePageDefinition(updatedDefinition);
+  warnings.push(
+    ...validation.warnings.map((warning) => `${warning.path}: ${warning.message}`),
+  );
+
+  return {
+    title: String(validation.normalizedDefinition.title ?? "Untitled Page"),
+    definition: validation.normalizedDefinition,
+    summary: `Applied ${appliedChanges.length} AI refinement change${appliedChanges.length === 1 ? "" : "s"}.`,
+    warnings,
+    usedComponents: validation.usedComponents,
+    assumptions: [
+      "Applied rule-based edits within the Sprint 1 component whitelist.",
+      "Preserved the existing page structure unless the root had to be wrapped into a linear layout.",
+      ...(input.locale ? [`Kept update copy compatible with locale "${input.locale}".`] : []),
+    ],
+    appliedChanges,
   };
 }

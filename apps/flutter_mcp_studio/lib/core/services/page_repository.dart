@@ -145,6 +145,26 @@ class PageRepository {
     );
   }
 
+  Future<PageUpdateResultModel> updatePageByInstruction({
+    required Map<String, dynamic> definition,
+    required String instruction,
+    String? locale,
+  }) async {
+    final response = await _client.post(
+      _uri('/api/tools/update_page_by_instruction'),
+      headers: <String, String>{'content-type': 'application/json'},
+      body: jsonEncode(<String, dynamic>{
+        'definition': definition,
+        'instruction': instruction,
+        if (locale != null && locale.isNotEmpty) 'locale': locale,
+      }),
+    );
+    final body = _decodeBody(response);
+    return PageUpdateResultModel.fromJson(
+      Map<String, dynamic>.from(body['result'] as Map),
+    );
+  }
+
   Future<List<ComponentCatalogItemModel>> listComponents({
     bool recommendedOnly = false,
   }) async {

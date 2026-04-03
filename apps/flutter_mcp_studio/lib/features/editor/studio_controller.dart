@@ -24,6 +24,7 @@ class StudioController extends ChangeNotifier {
   bool isBusy = false;
   bool isSaving = false;
   bool isGenerating = false;
+  bool isApplyingInstruction = false;
   bool isValidating = false;
   bool isUsingBundledFallback = false;
   bool isMcpConnected = false;
@@ -41,6 +42,7 @@ class StudioController extends ChangeNotifier {
       <ComponentCatalogItemModel>[];
   PageDocumentModel? currentDocument;
   GeneratedPageResultModel? lastGeneration;
+  PageUpdateResultModel? lastInstructionUpdate;
   PageValidationResultModel? validationResult;
 
   String get prettySource => const JsonEncoder.withIndent('  ')
@@ -85,7 +87,9 @@ class StudioController extends ChangeNotifier {
     isMcpConnected = await mcpBridgeService.ensureConnected(
       baseUrl: repository.baseUrl,
     );
-    statusMessage = isMcpConnected ? 'MCP Streamable HTTP 已连接' : 'MCP 连接失败，仍可通过 HTTP API 工作';
+    statusMessage = isMcpConnected
+        ? 'MCP Streamable HTTP 已连接'
+        : 'MCP 连接失败，仍可通过 HTTP API 工作';
     notifyListeners();
   }
 
@@ -147,8 +151,10 @@ class StudioController extends ChangeNotifier {
 
       selectedSlug = slug;
       selectedVersion = version ?? document.version;
-      currentDocument = document.copyWith(definition: _cloneMap(document.definition));
+      currentDocument =
+          document.copyWith(definition: _cloneMap(document.definition));
       lastGeneration = null;
+      lastInstructionUpdate = null;
 
       if (isUsingBundledFallback) {
         versions = <PageVersionModel>[
@@ -170,7 +176,8 @@ class StudioController extends ChangeNotifier {
 
       _bumpSource();
       if (canUseAiTools) {
-        await validateCurrentPage(showStatus: false, replaceWithNormalized: true);
+        await validateCurrentPage(
+            showStatus: false, replaceWithNormalized: true);
       } else {
         validationResult = null;
       }
@@ -185,7 +192,8 @@ class StudioController extends ChangeNotifier {
   Future<void> applySource(String source) async {
     try {
       final parsed = jsonDecode(source) as Map<String, dynamic>;
-      currentDocument = currentDocument?.copyWith(definition: _cloneMap(parsed));
+      currentDocument =
+          currentDocument?.copyWith(definition: _cloneMap(parsed));
       statusMessage = 'JSON 已应用到预览';
       error = null;
       await _persistDraft();
@@ -287,6 +295,7 @@ class StudioController extends ChangeNotifier {
       );
 
       lastGeneration = generated;
+      lastInstructionUpdate = null;
       currentDocument = PageDocumentModel(
         slug: generated.slug,
         title: generated.title,
@@ -306,6 +315,63 @@ class StudioController extends ChangeNotifier {
       statusMessage = 'AI 生成失败';
     } finally {
       isGenerating = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> updateCurrentPageByInstruction({
+    required String instruction,
+    String? locale,
+  }) async {
+    final trimmedInstruction = instruction.trim();
+    if (trimmedInstruction.isEmpty) {
+      error = '请输入修改指令';
+      statusMessage = 'AI 修改失败';
+      notifyListeners();
+      return;
+    }
+
+    final document = currentDocument;
+    if (document == null) {
+      error = '当前没有可修改的页面';
+      statusMessage = 'AI 修改失败';
+      notifyListeners();
+      return;
+    }
+
+    if (!canUseAiTools) {
+      error = '当前服务端不可用，暂时无法应用 AI 修改';
+      statusMessage = 'AI 修改不可用';
+      notifyListeners();
+      return;
+    }
+
+    isApplyingInstruction = true;
+    error = null;
+    notifyListeners();
+
+    try {
+      final updated = await repository.updatePageByInstruction(
+        definition: document.definition,
+        instruction: trimmedInstruction,
+        locale: locale,
+      );
+
+      lastInstructionUpdate = updated;
+      currentDocument = document.copyWith(
+        title: updated.title,
+        description: updated.summary,
+        definition: _cloneMap(updated.definition),
+      );
+      statusMessage = 'AI 修改已应用：${updated.appliedChanges.length} 项';
+      await _persistDraft();
+      _bumpSource();
+      await validateCurrentPage(showStatus: true, replaceWithNormalized: true);
+    } catch (updateError) {
+      error = updateError.toString();
+      statusMessage = 'AI 修改失败';
+    } finally {
+      isApplyingInstruction = false;
       notifyListeners();
     }
   }
@@ -482,7 +548,8 @@ class StudioController extends ChangeNotifier {
     content['type'] ??= 'linear';
     content['direction'] ??= 'vertical';
     content['gap'] ??= 16;
-    final children = content.putIfAbsent('children', () => <dynamic>[]) as List<dynamic>;
+    final children =
+        content.putIfAbsent('children', () => <dynamic>[]) as List<dynamic>;
     return children;
   }
 

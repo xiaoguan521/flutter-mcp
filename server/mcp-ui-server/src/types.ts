@@ -106,6 +106,24 @@ export interface GeneratedPageResult {
   assumptions: string[];
 }
 
+export interface UpdatePageByInstructionInput {
+  [key: string]: unknown;
+  definition: JsonObject;
+  instruction: string;
+  locale?: string;
+}
+
+export interface UpdatePageByInstructionResult {
+  [key: string]: unknown;
+  title: string;
+  definition: JsonObject;
+  summary: string;
+  warnings: string[];
+  usedComponents: string[];
+  assumptions: string[];
+  appliedChanges: string[];
+}
+
 export interface ValidationIssue {
   [key: string]: unknown;
   path: string;

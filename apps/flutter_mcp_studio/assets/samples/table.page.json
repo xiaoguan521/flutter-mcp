@@ -30,6 +30,10 @@
             "slo": "98.91%"
           }
         ],
+        "filters": {
+          "keyword": "",
+          "status": "all"
+        },
         "statusBadge": "稳定版待发布"
       }
     },
@@ -38,6 +42,44 @@
       "direction": "vertical",
       "gap": 16,
       "children": [
+        {
+          "type": "searchBar",
+          "label": "搜索服务",
+          "binding": "app.filters.keyword",
+          "placeholder": "搜索服务名称或 Owner",
+          "buttonLabel": "应用筛选",
+          "searchAction": {
+            "type": "state",
+            "action": "set",
+            "binding": "app.statusBadge",
+            "value": "已应用搜索筛选"
+          },
+          "filters": [
+            {
+              "type": "select",
+              "label": "状态",
+              "binding": "app.filters.status",
+              "items": [
+                {
+                  "value": "all",
+                  "label": "全部"
+                },
+                {
+                  "value": "healthy",
+                  "label": "稳定"
+                },
+                {
+                  "value": "watch",
+                  "label": "关注"
+                },
+                {
+                  "value": "degraded",
+                  "label": "风险"
+                }
+              ]
+            }
+          ]
+        },
         {
           "type": "antdSection",
           "title": "服务质量矩阵",
@@ -115,4 +157,3 @@
     }
   }
 }
-

@@ -84,6 +84,14 @@
   - KPI 统计卡
 - `antdTable`
   - DataTable 风格的表格，内置状态标签渲染
+- `input`
+  - 单行输入别名组件，落到 runtime 的 `textInput`
+- `textarea`
+  - 多行备注输入别名组件
+- `form`
+  - 面向表单页的结构化容器
+- `searchBar`
+  - 面向列表页的搜索与筛选容器
 
 ### 动作示例
 
@@ -119,6 +127,10 @@
 - `load_page`
 - `save_page_version`
 - `generate_page`
+- `generate_page_from_prompt`
+- `update_page_by_instruction`
+- `validate_page`
+- `list_components`
 - `resolve_resource_uri`
 
 ### Resource URI

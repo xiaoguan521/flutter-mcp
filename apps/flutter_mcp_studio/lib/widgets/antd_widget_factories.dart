@@ -5,6 +5,161 @@ void registerAntdWidgets(WidgetRegistry widgetRegistry) {
   widgetRegistry.register('antdSection', AntdSectionFactory());
   widgetRegistry.register('antdStat', AntdStatFactory());
   widgetRegistry.register('antdTable', AntdTableFactory());
+  widgetRegistry.register('input', InputFactory());
+  widgetRegistry.register('textarea', TextareaFactory());
+  widgetRegistry.register('form', FormFactory());
+  widgetRegistry.register('searchBar', SearchBarFactory());
+}
+
+List<Map<String, dynamic>> _definitionList(dynamic value) {
+  if (value is! List) {
+    return const <Map<String, dynamic>>[];
+  }
+
+  return value
+      .whereType<Map>()
+      .map((item) => Map<String, dynamic>.from(item))
+      .toList();
+}
+
+class InputFactory extends WidgetFactory {
+  @override
+  Widget build(Map<String, dynamic> definition, RenderContext context) {
+    final normalized = Map<String, dynamic>.from(definition)
+      ..['type'] = 'textInput';
+    normalized.putIfAbsent('maxLines', () => 1);
+    return context.buildWidget(normalized);
+  }
+}
+
+class TextareaFactory extends WidgetFactory {
+  @override
+  Widget build(Map<String, dynamic> definition, RenderContext context) {
+    final normalized = Map<String, dynamic>.from(definition)
+      ..['type'] = 'textInput';
+    normalized.putIfAbsent('maxLines', () => 4);
+    return context.buildWidget(normalized);
+  }
+}
+
+class FormFactory extends WidgetFactory {
+  @override
+  Widget build(Map<String, dynamic> definition, RenderContext context) {
+    final properties = extractProperties(definition);
+    final title = context.resolve<String?>(properties['title']) ?? '';
+    final subtitle = context.resolve<String?>(properties['subtitle']);
+    final childDef = properties['child'] as Map<String, dynamic>?;
+    final childDefs = _definitionList(properties['children']);
+
+    final body = childDef != null
+        ? context.buildWidget(childDef)
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              for (final (index, child) in childDefs.indexed) ...<Widget>[
+                if (index > 0) const SizedBox(height: 12),
+                context.buildWidget(child),
+              ],
+            ],
+          );
+
+    final widget = Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFBF5),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE7E5E4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          if (title.isNotEmpty)
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF0F172A),
+              ),
+            ),
+          if (subtitle != null && subtitle.isNotEmpty) ...<Widget>[
+            const SizedBox(height: 6),
+            Text(
+              subtitle,
+              style: const TextStyle(
+                fontSize: 13,
+                color: Color(0xFF78716C),
+                height: 1.45,
+              ),
+            ),
+          ],
+          if (title.isNotEmpty || (subtitle != null && subtitle.isNotEmpty))
+            const SizedBox(height: 16),
+          body,
+        ],
+      ),
+    );
+
+    return applyCommonWrappers(widget, properties, context);
+  }
+}
+
+class SearchBarFactory extends WidgetFactory {
+  @override
+  Widget build(Map<String, dynamic> definition, RenderContext context) {
+    final properties = extractProperties(definition);
+    final label = context.resolve<String?>(properties['label']) ?? 'Search';
+    final placeholder =
+        context.resolve<String?>(properties['placeholder']) ?? 'Enter keyword';
+    final binding = properties['binding']?.toString() ?? '';
+    final buttonLabel =
+        context.resolve<String?>(properties['buttonLabel']) ?? 'Search';
+    final buttonVariant =
+        context.resolve<String?>(properties['buttonVariant']) ?? 'outlined';
+    final searchAction = properties['searchAction'];
+    final filters = _definitionList(properties['filters']);
+    final actions = _definitionList(properties['actions']);
+
+    final children = <Widget>[
+      SizedBox(
+        width: 260,
+        child: context.buildWidget(<String, dynamic>{
+          'type': 'input',
+          'label': label,
+          'binding': binding,
+          'placeholder': placeholder,
+        }),
+      ),
+      ...filters.map(context.buildWidget),
+      ...actions.map(context.buildWidget),
+      if (searchAction != null || buttonLabel.isNotEmpty)
+        context.buildWidget(<String, dynamic>{
+          'type': 'button',
+          'label': buttonLabel,
+          'variant': buttonVariant,
+          if (searchAction != null) 'click': searchAction,
+        }),
+    ];
+
+    final widget = Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Wrap(
+        spacing: 12,
+        runSpacing: 12,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: children,
+      ),
+    );
+
+    return applyCommonWrappers(widget, properties, context);
+  }
 }
 
 class AntdSectionFactory extends WidgetFactory {

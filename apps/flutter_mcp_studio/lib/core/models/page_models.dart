@@ -312,6 +312,48 @@ class GeneratedPageResultModel {
   }
 }
 
+class PageUpdateResultModel {
+  PageUpdateResultModel({
+    required this.title,
+    required this.definition,
+    required this.summary,
+    required this.warnings,
+    required this.usedComponents,
+    required this.assumptions,
+    required this.appliedChanges,
+  });
+
+  final String title;
+  final Map<String, dynamic> definition;
+  final String summary;
+  final List<String> warnings;
+  final List<String> usedComponents;
+  final List<String> assumptions;
+  final List<String> appliedChanges;
+
+  factory PageUpdateResultModel.fromJson(Map<String, dynamic> json) {
+    return PageUpdateResultModel(
+      title: json['title'] as String? ?? 'Untitled Page',
+      definition: Map<String, dynamic>.from(
+        json['definition'] as Map<String, dynamic>,
+      ),
+      summary: json['summary'] as String? ?? '',
+      warnings: (json['warnings'] as List<dynamic>? ?? <dynamic>[])
+          .map((item) => item.toString())
+          .toList(),
+      usedComponents: (json['usedComponents'] as List<dynamic>? ?? <dynamic>[])
+          .map((item) => item.toString())
+          .toList(),
+      assumptions: (json['assumptions'] as List<dynamic>? ?? <dynamic>[])
+          .map((item) => item.toString())
+          .toList(),
+      appliedChanges: (json['appliedChanges'] as List<dynamic>? ?? <dynamic>[])
+          .map((item) => item.toString())
+          .toList(),
+    );
+  }
+}
+
 class ComponentPropModel {
   ComponentPropModel({
     required this.name,

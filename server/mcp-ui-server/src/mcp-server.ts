@@ -194,6 +194,32 @@ export function createMcpUiServer(options: {
   );
 
   server.registerTool(
+    "update_page_by_instruction",
+    {
+      title: "Update page by instruction",
+      description:
+        "Apply a natural-language edit instruction to an existing Sprint 1 page DSL.",
+      inputSchema: {
+        definition: z.record(z.string(), z.unknown()),
+        instruction: z.string().min(1),
+        locale: z.string().optional(),
+      },
+    },
+    async ({ definition, instruction, locale }) => {
+      const result = await options.toolService.updatePageByInstruction({
+        definition,
+        instruction,
+        locale,
+      });
+
+      return {
+        content: [asTextBlock(result)],
+        structuredContent: result,
+      };
+    },
+  );
+
+  server.registerTool(
     "list_components",
     {
       title: "List supported components",

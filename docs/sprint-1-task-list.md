@@ -62,6 +62,15 @@
    - form
    - table/list
 
+### 5.1 当前达成情况（2026-04-03）
+
+- [x] 自然语言 Prompt 已可生成合法页面 DSL，并返回摘要、警告、组件使用清单与假设说明
+- [x] Studio 已可直接加载生成结果，并同步到 JSON 编辑区与预览区
+- [x] Runtime 已可稳定渲染当前 Sprint 覆盖的 dashboard / form / table-list 页面
+- [x] 非法 DSL 已可返回结构化错误，Studio 中可直接查看错误路径与警告
+- [x] 用户已可在 AI 生成结果上继续手工编辑、AI 二次修改并固化保存
+- [x] 三类页面样例与服务端自动化测试已补齐，作为当前回归基线
+
 ## 6. 用户故事
 
 ### US-01 生成页面
@@ -158,6 +167,10 @@
   - dashboard
   - form
   - table/list
+- 当前共享示例：
+  - `帮我生成一个销售 dashboard，包含营收、转化率、重点商机和负责人表格`
+  - `帮我生成一个客户录入表单，包含客户名称、负责人、优先级、预算和备注`
+  - `帮我生成一个订单列表页，包含状态筛选、搜索框、负责人和状态列`
 - 完成标准：
   - 团队有统一示例可回归测试
 
@@ -354,6 +367,19 @@
   - 销售 dashboard
   - 客户录入 form
   - 订单 table/list
+- 当前验收样例：
+  - 销售 dashboard
+    Prompt：`帮我生成一个销售 dashboard，包含营收、转化率、重点商机和负责人表格`
+    期望结构：`page -> linear -> antdSection + antdStat + antdTable + button/select`
+    验收结论：通过，生成结果可直接预览并通过服务端校验
+  - 客户录入 form
+    Prompt：`帮我生成一个客户录入表单，包含客户名称、负责人、预算、优先级和备注`
+    期望结构：`page -> linear -> antdSection + textInput + select + numberField + button`
+    验收结论：通过，表单类页面可生成、可预览、可继续编辑
+  - 订单 table/list
+    Prompt：`帮我生成一个订单列表页，展示订单号、负责人、状态，并保留操作按钮`
+    期望结构：`page -> linear -> antdSection + antdTable + button`
+    验收结论：通过，列表类页面可生成并支持后续 AI 二次修改
 - 完成标准：
   - 每组场景都有 Prompt、期望结构、验收结论
 
@@ -361,6 +387,10 @@
 
 - 优先级：P0
 - 目标：为 `generate_page_from_prompt` / `validate_page` 补测试
+- 当前覆盖：
+  - `generate_page_from_prompt` 三类页面生成测试
+  - `validate_page` 非线性根节点归一化回归测试
+  - `update_page_by_instruction` 标题修改与区块追加测试
 - 完成标准：
   - 核心链路至少有最小自动化覆盖
 
@@ -395,33 +425,33 @@
 
 ## 9.1 P0 必须完成
 
-- S1-A1 页面生成输入协议
-- S1-A2 页面生成输出协议
-- S1-B1 `generate_page_from_prompt`
-- S1-B2 `validate_page`
-- S1-B3 `list_components`
-- S1-C1 页面 Schema 初版
-- S1-C2 组件目录元数据
-- S1-D1 Prompt 面板
-- S1-D2 生成结果加载流程
-- S1-D3 校验错误展示
-- S1-D4 再编辑与固化串联
-- S1-E1 生成页面兼容性补齐
-- S1-E2 运行时错误兜底
-- S1-F1 三类页面验收样例
-- S1-F2 服务端校验测试
+- [x] S1-A1 页面生成输入协议
+- [x] S1-A2 页面生成输出协议
+- [x] S1-B1 `generate_page_from_prompt`
+- [x] S1-B2 `validate_page`
+- [x] S1-B3 `list_components`
+- [x] S1-C1 页面 Schema 初版
+- [x] S1-C2 组件目录元数据
+- [x] S1-D1 Prompt 面板
+- [x] S1-D2 生成结果加载流程
+- [x] S1-D3 校验错误展示
+- [x] S1-D4 再编辑与固化串联
+- [x] S1-E1 生成页面兼容性补齐
+- [x] S1-E2 运行时错误兜底
+- [x] S1-F1 三类页面验收样例
+- [x] S1-F2 服务端校验测试
 
 ## 9.2 P1 建议完成
 
-- S1-A3 Prompt 模板与示例库
-- S1-B4 `update_page_by_instruction`
-- S1-B5 生成接口测试用例
-- S1-C3 生成约束规则
-- S1-D5 生成记录保留
-- S1-E3 组件补齐
-- S1-F3 Studio 冒烟验证
-- S1-G1 Sprint 演示脚本
-- S1-G2 Prompt 编写规范
+- [x] S1-A3 Prompt 模板与示例库
+- [x] S1-B4 `update_page_by_instruction`
+- [x] S1-B5 生成接口测试用例
+- [x] S1-C3 生成约束规则
+- [x] S1-D5 生成记录保留
+- [x] S1-E3 组件补齐
+- [ ] S1-F3 Studio 冒烟验证
+- [ ] S1-G1 Sprint 演示脚本
+- [ ] S1-G2 Prompt 编写规范
 
 ## 10. 建议执行顺序
 

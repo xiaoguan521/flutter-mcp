@@ -8,11 +8,14 @@ import type {
   PageStore,
   SavePageInput,
   SeedPage,
+  UpdatePageByInstructionInput,
+  UpdatePageByInstructionResult,
   ValidatePageResult,
 } from "./types.js";
 import {
   generatePageFromPrompt,
   listComponentCatalog,
+  updatePageByInstruction,
   validatePageDefinition,
 } from "./page-tools.js";
 import { normalizeSlug } from "./uri.js";
@@ -74,6 +77,12 @@ export class ToolService {
 
   async validatePage(input: { definition: JsonObject }): Promise<ValidatePageResult> {
     return validatePageDefinition(input.definition);
+  }
+
+  async updatePageByInstruction(
+    input: UpdatePageByInstructionInput,
+  ): Promise<UpdatePageByInstructionResult> {
+    return updatePageByInstruction(input);
   }
 
   async listComponents(
