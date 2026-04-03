@@ -57,7 +57,7 @@ test("validatePageDefinition keeps non-linear content and reports warnings clean
   assert.equal(result.warnings[0]?.path, "state");
 });
 
-test("updatePageByInstruction can rename a page and append supported sections", () => {
+test("updatePageByInstruction can rename a page and upsert supported sections", () => {
   const updated = updatePageByInstruction({
     definition: {
       type: "page",
@@ -86,6 +86,59 @@ test("updatePageByInstruction can rename a page and append supported sections", 
   assert.equal(content.children.length, 2);
   assert.ok(updated.usedComponents.includes("searchBar"));
   assert.ok(updated.usedComponents.includes("button"));
+});
+
+test("updatePageByInstruction reuses existing list filters and action toolbars", () => {
+  const generated = generatePageFromPrompt({
+    prompt: "客户列表页，包含搜索、状态筛选和操作按钮",
+    pageType: "table-list",
+  });
+
+  const updated = updatePageByInstruction({
+    definition: generated.definition,
+    instruction: "把标题改成客户运营看板，并增加搜索筛选和操作按钮",
+  });
+
+  const content = updated.definition.content as {
+    type: string;
+    children: Array<Record<string, unknown>>;
+  };
+  const searchBarCount = content.children.filter((child) => {
+    if (child.type === "searchBar") {
+      return true;
+    }
+    return child.type === "antdSection"
+      && typeof child.child === "object"
+      && child.child !== null
+      && (child.child as Record<string, unknown>).type === "searchBar";
+  }).length;
+  const toolbarCount = content.children.filter((child) => {
+    if (child.type === "linear") {
+      return true;
+    }
+    return child.type === "antdSection"
+      && typeof child.child === "object"
+      && child.child !== null
+      && (child.child as Record<string, unknown>).type === "linear";
+  }).filter((child) => {
+    const linear = child.type === "linear"
+      ? child
+      : child.child as Record<string, unknown>;
+    const children = Array.isArray(linear.children)
+      ? linear.children
+      : [];
+    return children.some((item) => {
+      return typeof item === "object"
+        && item !== null
+        && (item as Record<string, unknown>).type === "button";
+    });
+  }).length;
+
+  assert.equal(content.children.length, 3);
+  assert.equal(searchBarCount, 1);
+  assert.equal(toolbarCount, 1);
+  assert.ok(updated.appliedChanges.some((item) => item.includes("existing search")));
+  assert.ok(updated.appliedChanges.some((item) => item.includes("existing action")));
 });
 
 test("validatePageDefinition accepts Sprint 1 expanded form and search components", () => {

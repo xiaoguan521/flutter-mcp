@@ -391,6 +391,7 @@
   - `generate_page_from_prompt` 三类页面生成测试
   - `validate_page` 非线性根节点归一化回归测试
   - `update_page_by_instruction` 标题修改与区块追加测试
+  - `StudioController` 主链路控制层冒烟测试
 - 完成标准：
   - 核心链路至少有最小自动化覆盖
 
@@ -398,6 +399,11 @@
 
 - 优先级：P1
 - 目标：验证“输入 Prompt -> 生成 -> 预览 -> 固化”主链路
+- 当前状态：
+  - 已补自动化辅助验证：
+    - `apps/flutter_mcp_studio/test/studio_controller_smoke_test.dart`
+    - [studio-smoke-checklist.md](./studio-smoke-checklist.md)
+  - 手工 UI 点击记录仍待执行，因此当前项暂不标记完成
 - 完成标准：
   - 至少 1 次完整手工冒烟通过
 
@@ -413,11 +419,15 @@
   - 查看校验结果
   - 人工微调
   - 固化保存
+- 当前交付：
+  - [sprint-review-demo-script.md](./sprint-review-demo-script.md)
 
 ### S1-G2 Prompt 编写规范
 
 - 优先级：P1
 - 目标：沉淀团队内部 Prompt 书写约定
+- 当前交付：
+  - [prompt-guidelines.md](./prompt-guidelines.md)
 - 完成标准：
   - 后续测试与产品沟通口径更稳定
 
@@ -450,8 +460,8 @@
 - [x] S1-D5 生成记录保留
 - [x] S1-E3 组件补齐
 - [ ] S1-F3 Studio 冒烟验证
-- [ ] S1-G1 Sprint 演示脚本
-- [ ] S1-G2 Prompt 编写规范
+- [x] S1-G1 Sprint 演示脚本
+- [x] S1-G2 Prompt 编写规范
 
 ## 10. 建议执行顺序
 

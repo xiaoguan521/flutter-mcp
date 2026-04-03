@@ -185,6 +185,192 @@ function appendRootChild(definition: JsonObject, child: JsonObject): void {
   children.push(child);
 }
 
+type ExistingSearchBarTarget = {
+  searchBar: JsonObject;
+};
+
+type ExistingToolbarTarget = {
+  toolbar: JsonObject;
+};
+
+function defaultStatusFilterItems(): JsonObject[] {
+  return [
+    { value: "all", label: "All" },
+    { value: "healthy", label: "Healthy" },
+    { value: "watch", label: "Watch" },
+    { value: "degraded", label: "Degraded" },
+  ];
+}
+
+function rootChildren(definition: JsonObject): JsonObject[] {
+  const root = ensureLinearRoot(definition);
+  const children = root.children as unknown[];
+  return children.filter(isObject);
+}
+
+function linearHasButtons(node: JsonObject): boolean {
+  return Array.isArray(node.children)
+    && node.children.some((child) => isObject(child) && child.type === "button");
+}
+
+function findExistingSearchBar(definition: JsonObject): ExistingSearchBarTarget | null {
+  for (const child of rootChildren(definition)) {
+    if (child.type === "searchBar") {
+      return { searchBar: child };
+    }
+
+    if (
+      child.type === "antdSection"
+      && isObject(child.child)
+      && child.child.type === "searchBar"
+    ) {
+      return { searchBar: child.child };
+    }
+  }
+
+  return null;
+}
+
+function findExistingToolbar(definition: JsonObject): ExistingToolbarTarget | null {
+  for (const child of rootChildren(definition)) {
+    if (child.type === "linear" && linearHasButtons(child)) {
+      return { toolbar: child };
+    }
+
+    if (
+      child.type === "antdSection"
+      && isObject(child.child)
+      && child.child.type === "linear"
+      && linearHasButtons(child.child)
+    ) {
+      return { toolbar: child.child };
+    }
+  }
+
+  return null;
+}
+
+function ensureSearchBarDefinition(searchBar: JsonObject): void {
+  searchBar.type = "searchBar";
+  if (typeof searchBar.label !== "string" || searchBar.label.trim().length === 0) {
+    searchBar.label = "Search";
+  }
+  if (typeof searchBar.binding !== "string" || searchBar.binding.trim().length === 0) {
+    searchBar.binding = "app.filters.keyword";
+  }
+  if (typeof searchBar.placeholder !== "string" || searchBar.placeholder.trim().length === 0) {
+    searchBar.placeholder = "Enter keyword";
+  }
+  if (typeof searchBar.buttonLabel !== "string" || searchBar.buttonLabel.trim().length === 0) {
+    searchBar.buttonLabel = "Apply Filters";
+  }
+  if (!isObject(searchBar.searchAction)) {
+    searchBar.searchAction = stateAction("app.statusText", "set", "Filters updated");
+  }
+
+  const filters = Array.isArray(searchBar.filters)
+    ? searchBar.filters
+    : ((searchBar.filters = []) as unknown[]);
+  const existingStatusFilter = filters.find((filter) => {
+    return isObject(filter)
+      && filter.type === "select"
+      && filter.binding === "app.filters.status";
+  });
+
+  if (!existingStatusFilter) {
+    filters.push({
+      type: "select",
+      label: "Status",
+      binding: "app.filters.status",
+      items: defaultStatusFilterItems(),
+    });
+    return;
+  }
+
+  if (
+    typeof existingStatusFilter.label !== "string"
+    || existingStatusFilter.label.trim().length === 0
+  ) {
+    existingStatusFilter.label = "Status";
+  }
+  if (!Array.isArray(existingStatusFilter.items) || existingStatusFilter.items.length === 0) {
+    existingStatusFilter.items = defaultStatusFilterItems();
+  }
+}
+
+function isPersistButton(button: JsonObject): boolean {
+  return isObject(button.click)
+    && button.click.type === "tool"
+    && button.click.tool === "persistPage";
+}
+
+function isStatusButton(button: JsonObject): boolean {
+  return isObject(button.click)
+    && button.click.type === "state"
+    && button.click.binding === "app.statusText";
+}
+
+function ensureToolbarDefinition(toolbar: JsonObject): void {
+  toolbar.type = "linear";
+  if (typeof toolbar.direction !== "string") {
+    toolbar.direction = "horizontal";
+  }
+  if (typeof toolbar.gap !== "number") {
+    toolbar.gap = 12;
+  }
+  if (typeof toolbar.wrap !== "boolean") {
+    toolbar.wrap = true;
+  }
+
+  const children = Array.isArray(toolbar.children)
+    ? toolbar.children
+    : ((toolbar.children = []) as unknown[]);
+  const buttons = children.filter((child): child is JsonObject => {
+    return isObject(child) && child.type === "button";
+  });
+
+  if (!buttons.some(isStatusButton)) {
+    children.unshift({
+      type: "button",
+      label: "Mark Ready",
+      variant: "outlined",
+      click: stateAction("app.statusText", "set", "Ready after AI update"),
+    });
+  }
+
+  if (!buttons.some(isPersistButton)) {
+    children.push({
+      type: "button",
+      label: "Save Page",
+      variant: "filled",
+      backgroundColor: "#0f766e",
+      click: persistAction(),
+    });
+  }
+}
+
+function upsertSearchSection(definition: JsonObject): "added" | "updated" {
+  const existing = findExistingSearchBar(definition);
+  if (existing != null) {
+    ensureSearchBarDefinition(existing.searchBar);
+    return "updated";
+  }
+
+  appendRootChild(definition, buildFilterSection("Query Filters"));
+  return "added";
+}
+
+function upsertToolbarSection(definition: JsonObject): "added" | "updated" {
+  const existing = findExistingToolbar(definition);
+  if (existing != null) {
+    ensureToolbarDefinition(existing.toolbar);
+    return "updated";
+  }
+
+  appendRootChild(definition, buildToolbarSection("Action Bar"));
+  return "added";
+}
+
 function extractRequestedTitle(instruction: string): string | null {
   const patterns = [
     /(?:页面标题|标题)\s*(?:改成|改为|设为|叫做)\s*[“"]?([^"”，,\n。；;]+)[”"]?/i,
@@ -245,12 +431,7 @@ function buildFilterSection(title: string): JsonObject {
           type: "select",
           label: "Status",
           binding: "app.filters.status",
-          items: [
-            { value: "all", label: "All" },
-            { value: "healthy", label: "Healthy" },
-            { value: "watch", label: "Watch" },
-            { value: "degraded", label: "Degraded" },
-          ],
+          items: defaultStatusFilterItems(),
         },
       ],
     },
@@ -1040,7 +1221,12 @@ export function updatePageByInstruction(
     initialState.statusText = typeof initialState.statusText === "string"
       ? initialState.statusText
       : "Filters ready";
-    addSection(buildFilterSection("Query Filters"), "Added search and status filter controls.");
+    const change = upsertSearchSection(updatedDefinition);
+    appliedChanges.push(
+      change === "added"
+        ? "Added search and status filter controls."
+        : "Updated the existing search and status filter controls.",
+    );
   }
 
   if (/(?:table|list|grid|queue|表格|列表|清单)/i.test(instruction)) {
@@ -1058,7 +1244,12 @@ export function updatePageByInstruction(
     initialState.statusText = typeof initialState.statusText === "string"
       ? initialState.statusText
       : "Ready";
-    addSection(buildToolbarSection("Action Bar"), "Added an action toolbar section.");
+    const change = upsertToolbarSection(updatedDefinition);
+    appliedChanges.push(
+      change === "added"
+        ? "Added an action toolbar section."
+        : "Updated the existing action toolbar section.",
+    );
   }
 
   if (/(?:note|summary|说明|备注|描述)/i.test(instruction)) {

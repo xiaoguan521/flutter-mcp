@@ -50,16 +50,19 @@ class FormFactory extends WidgetFactory {
     final subtitle = context.resolve<String?>(properties['subtitle']);
     final childDef = properties['child'] as Map<String, dynamic>?;
     final childDefs = _definitionList(properties['children']);
-
-    final body = childDef != null
-        ? context.buildWidget(childDef)
+    final formChildren = <Widget>[
+      if (childDef != null) context.buildWidget(childDef),
+      for (final child in childDefs) context.buildWidget(child),
+    ];
+    final body = formChildren.isEmpty
+        ? const SizedBox.shrink()
         : Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              for (final (index, child) in childDefs.indexed) ...<Widget>[
+              for (final (index, child) in formChildren.indexed) ...<Widget>[
                 if (index > 0) const SizedBox(height: 12),
-                context.buildWidget(child),
+                child,
               ],
             ],
           );
