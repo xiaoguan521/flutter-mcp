@@ -353,6 +353,6 @@
 
 为避免路线图停留在阶段目标层，`阶段 1：AI 单页生成 MVP` 已进一步细化为 Sprint 清单：
 
-- [sprint-1-task-list.md](M:\flutter-mcp\docs\sprint-1-task-list.md)
+- [sprint-1-task-list.md](./sprint-1-task-list.md)
 
 建议团队在正式排期时，以该 Sprint 文档作为实施入口，以本文件作为阶段目标与里程碑对照。

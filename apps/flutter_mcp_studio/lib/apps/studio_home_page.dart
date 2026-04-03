@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../core/models/page_models.dart';
 import '../features/editor/studio_controller.dart';
 import '../features/runtime/runtime_canvas.dart';
 
@@ -13,11 +14,14 @@ class StudioHomePage extends StatefulWidget {
 
 class _StudioHomePageState extends State<StudioHomePage> {
   final TextEditingController _sourceController = TextEditingController();
+  final TextEditingController _promptController = TextEditingController();
+  String _selectedPageType = 'dashboard';
   int _lastSourceRevision = -1;
 
   @override
   void dispose() {
     _sourceController.dispose();
+    _promptController.dispose();
     super.dispose();
   }
 
@@ -295,6 +299,8 @@ class _StudioHomePageState extends State<StudioHomePage> {
 
   Widget _buildPreviewPanel(StudioController controller) {
     final document = controller.currentDocument;
+    final generation = controller.lastGeneration;
+    final validation = controller.validationResult;
     return _panel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -327,6 +333,8 @@ class _StudioHomePageState extends State<StudioHomePage> {
                 ),
               ),
             ),
+          // -- AI 生成摘要 --
+          if (generation != null) _buildGenerationSummary(generation),
           const SizedBox(height: 16),
           Expanded(
             child: Container(
@@ -346,6 +354,163 @@ class _StudioHomePageState extends State<StudioHomePage> {
                     ),
             ),
           ),
+          // -- 校验结果展示 --
+          if (validation != null) _buildValidationPanel(validation),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGenerationSummary(GeneratedPageResultModel generation) {
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFECFDF5),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFA7F3D0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              const Icon(Icons.auto_awesome, size: 16, color: Color(0xFF059669)),
+              const SizedBox(width: 6),
+              Text(
+                'AI 生成 · ${generation.pageType}',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF065F46),
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            generation.summary,
+            style: const TextStyle(color: Color(0xFF064E3B), fontSize: 12, height: 1.5),
+          ),
+          if (generation.assumptions.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            const Text(
+              'AI 假设',
+              style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF065F46), fontSize: 12),
+            ),
+            const SizedBox(height: 4),
+            ...generation.assumptions.map(
+              (a) => Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: Text('· $a', style: const TextStyle(color: Color(0xFF064E3B), fontSize: 11, height: 1.4)),
+              ),
+            ),
+          ],
+          if (generation.warnings.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            ...generation.warnings.map(
+              (w) => Container(
+                margin: const EdgeInsets.only(top: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF3C7),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(w, style: const TextStyle(color: Color(0xFF92400E), fontSize: 11)),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildValidationPanel(PageValidationResultModel validation) {
+    if (validation.errors.isEmpty && validation.warnings.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 10),
+        child: Row(
+          children: const <Widget>[
+            Icon(Icons.check_circle_outline, size: 16, color: Color(0xFF059669)),
+            SizedBox(width: 6),
+            Text(
+              '页面结构校验通过',
+              style: TextStyle(color: Color(0xFF059669), fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(top: 10),
+      constraints: const BoxConstraints(maxHeight: 160),
+      decoration: BoxDecoration(
+        color: validation.valid ? const Color(0xFFFFFBEB) : const Color(0xFFFEF2F2),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: validation.valid ? const Color(0xFFFDE68A) : const Color(0xFFFECACA),
+        ),
+      ),
+      child: ListView(
+        padding: const EdgeInsets.all(10),
+        children: <Widget>[
+          ...validation.errors.map(
+            (e) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  const Icon(Icons.error_outline, size: 14, color: Color(0xFFDC2626)),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          '${e.path}: ${e.message}',
+                          style: const TextStyle(color: Color(0xFFB91C1C), fontSize: 11, fontWeight: FontWeight.w600),
+                        ),
+                        if (e.suggestion != null)
+                          Text(
+                            e.suggestion!,
+                            style: const TextStyle(color: Color(0xFF92400E), fontSize: 11),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          ...validation.warnings.map(
+            (w) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  const Icon(Icons.warning_amber_rounded, size: 14, color: Color(0xFFD97706)),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          '${w.path}: ${w.message}',
+                          style: const TextStyle(color: Color(0xFF92400E), fontSize: 11, fontWeight: FontWeight.w600),
+                        ),
+                        if (w.suggestion != null)
+                          Text(
+                            w.suggestion!,
+                            style: const TextStyle(color: Color(0xFF78716C), fontSize: 11),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -356,6 +521,13 @@ class _StudioHomePageState extends State<StudioHomePage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
+          // -- AI Prompt 面板 --
+          if (controller.canUseAiTools) ...[
+            _buildPromptPanel(controller),
+            const SizedBox(height: 16),
+            const Divider(height: 1),
+            const SizedBox(height: 12),
+          ],
           const Text(
             '人工定制',
             style: TextStyle(
@@ -496,6 +668,115 @@ class _StudioHomePageState extends State<StudioHomePage> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildPromptPanel(StudioController controller) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            const Icon(Icons.auto_awesome, size: 18, color: Color(0xFF7C3AED)),
+            const SizedBox(width: 6),
+            const Text(
+              'AI 页面生成',
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 16,
+                color: Color(0xFF0F172A),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _promptController,
+          maxLines: 3,
+          minLines: 2,
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: const Color(0xFFF8FAFC),
+            hintText: '描述你想要的页面，如：一个销售团队仪表盘，展示营收、转化率和签约管线',
+            hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: Color(0xFF7C3AED), width: 1.5),
+            ),
+            contentPadding: const EdgeInsets.all(12),
+          ),
+          style: const TextStyle(fontSize: 13, height: 1.4),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: <Widget>[
+            Container(
+              height: 36,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: _selectedPageType,
+                  isDense: true,
+                  style: const TextStyle(fontSize: 13, color: Color(0xFF334155)),
+                  items: const <DropdownMenuItem<String>>[
+                    DropdownMenuItem(value: 'dashboard', child: Text('Dashboard')),
+                    DropdownMenuItem(value: 'form', child: Text('Form')),
+                    DropdownMenuItem(value: 'table-list', child: Text('Table / List')),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() => _selectedPageType = value);
+                    }
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: SizedBox(
+                height: 36,
+                child: FilledButton.icon(
+                  onPressed: controller.isGenerating
+                      ? null
+                      : () {
+                          controller.generatePageFromPrompt(
+                            prompt: _promptController.text,
+                            pageType: _selectedPageType,
+                          );
+                        },
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF7C3AED),
+                  ),
+                  icon: controller.isGenerating
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.auto_awesome, size: 16),
+                  label: Text(controller.isGenerating ? '生成中…' : 'AI 生成页面'),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 

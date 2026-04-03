@@ -2,7 +2,7 @@
 
 ## 1. 文档目标
 
-本文件用于把 [product-roadmap.md](M:\flutter-mcp\docs\product-roadmap.md) 与 [technical-task-breakdown.md](M:\flutter-mcp\docs\technical-task-breakdown.md) 中的“阶段 1：AI 单页生成 MVP”细化为一份可执行的 Sprint 清单。
+本文件用于把 [product-roadmap.md](./product-roadmap.md) 与 [technical-task-breakdown.md](./technical-task-breakdown.md) 中的“阶段 1：AI 单页生成 MVP”细化为一份可执行的 Sprint 清单。
 
 默认按 `2 周 Sprint` 组织，若团队节奏不同，可在不改变范围边界的前提下调整排期。
 

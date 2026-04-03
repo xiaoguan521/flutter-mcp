@@ -598,7 +598,7 @@
 
 为了把本文件中的阶段性任务进一步落实到可执行层，当前已经补充第一期 Sprint 文档：
 
-- [sprint-1-task-list.md](M:\flutter-mcp\docs\sprint-1-task-list.md)
+- [sprint-1-task-list.md](./sprint-1-task-list.md)
 
 这份 Sprint 文档重点覆盖：
 

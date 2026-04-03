@@ -592,6 +592,46 @@ class StudioController extends ChangeNotifier {
     }
   }
 
+  Future<void> _loadAiMetadata() async {
+    if (isUsingBundledFallback) {
+      templates = _defaultTemplates();
+      componentCatalog = <ComponentCatalogItemModel>[];
+      return;
+    }
+
+    try {
+      final results = await Future.wait(<Future<Object>>[
+        repository.loadTemplates(),
+        repository.listComponents(),
+      ]);
+      templates = results[0] as List<PageTemplateModel>;
+      componentCatalog = results[1] as List<ComponentCatalogItemModel>;
+    } catch (_) {
+      templates = _defaultTemplates();
+      componentCatalog = <ComponentCatalogItemModel>[];
+    }
+  }
+
+  List<PageTemplateModel> _defaultTemplates() {
+    return <PageTemplateModel>[
+      PageTemplateModel(
+        slug: 'dashboard',
+        title: 'Dashboard',
+        description: 'KPI 概览仪表盘',
+      ),
+      PageTemplateModel(
+        slug: 'form',
+        title: 'Form',
+        description: '数据录入表单',
+      ),
+      PageTemplateModel(
+        slug: 'table',
+        title: 'Table / List',
+        description: '数据列表页',
+      ),
+    ];
+  }
+
   Map<String, dynamic> _cloneMap(Map<String, dynamic> source) {
     return Map<String, dynamic>.from(
       jsonDecode(jsonEncode(source)) as Map<String, dynamic>,
