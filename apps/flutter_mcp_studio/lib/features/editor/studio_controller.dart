@@ -332,7 +332,7 @@ class StudioController extends ChangeNotifier {
       final result = await repository.validatePage(document.definition);
       validationResult = result;
 
-      if (replaceWithNormalized) {
+      if (replaceWithNormalized && result.valid) {
         currentDocument = document.copyWith(
           definition: _cloneMap(result.normalizedDefinition),
         );
@@ -601,7 +601,7 @@ class StudioController extends ChangeNotifier {
 
     try {
       final results = await Future.wait(<Future<Object>>[
-        repository.loadTemplates(),
+        repository.listTemplates(),
         repository.listComponents(),
       ]);
       templates = results[0] as List<PageTemplateModel>;

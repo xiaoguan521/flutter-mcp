@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type {
   ComponentCatalogItem,
   GeneratePageFromPromptInput,
@@ -117,15 +118,30 @@ function buildTitle(prompt: string, pageType: PageType): string {
   return snippet ? `${snippet} Dashboard` : "AI Generated Dashboard";
 }
 
-function resolveSlug(inputSlug: string | undefined, title: string, pageType: PageType): string {
-  const normalized = normalizeSlug(inputSlug ?? "") || normalizeSlug(title);
-  if (normalized) {
-    return normalized;
+function generatedSlugBase(prompt: string, title: string, pageType: PageType): string {
+  const candidates = [normalizeSlug(prompt), normalizeSlug(title)];
+  for (const candidate of candidates) {
+    if (candidate) {
+      return candidate.slice(0, 40).replace(/^-+|-+$/g, "") || candidate;
+    }
   }
 
-  const suffix = Date.now().toString().slice(-6);
-  const prefix = pageType === "table-list" ? "table" : pageType;
-  return `ai-${prefix}-${suffix}`;
+  return pageType === "table-list" ? "table" : pageType;
+}
+
+function resolveSlug(
+  inputSlug: string | undefined,
+  prompt: string,
+  title: string,
+  pageType: PageType,
+): string {
+  const explicitSlug = normalizeSlug(inputSlug ?? "");
+  if (explicitSlug) {
+    return explicitSlug;
+  }
+
+  const slugBase = generatedSlugBase(prompt, title, pageType);
+  return `ai-${slugBase}-${randomUUID().slice(0, 8)}`;
 }
 
 function stateAction(binding: string, action: string, value: unknown): JsonObject {
@@ -552,18 +568,27 @@ function normalizeDefinition(input: JsonObject): JsonObject {
     normalized.title = "Untitled Page";
   }
 
-  const content = isObject(normalized.content)
-    ? normalized.content
-    : ((normalized.content = { type: "linear", direction: "vertical", gap: 16, children: [] }) as JsonObject);
-  content.type = "linear";
-  if (typeof content.direction !== "string") {
-    content.direction = "vertical";
+  if (!isObject(normalized.content)) {
+    normalized.content = {
+      type: "linear",
+      direction: "vertical",
+      gap: 16,
+      children: [],
+    };
+    return normalized;
   }
-  if (typeof content.gap !== "number") {
-    content.gap = 16;
-  }
-  if (!Array.isArray(content.children)) {
-    content.children = [];
+
+  const content = normalized.content;
+  if (content.type === "linear") {
+    if (typeof content.direction !== "string") {
+      content.direction = "vertical";
+    }
+    if (typeof content.gap !== "number") {
+      content.gap = 16;
+    }
+    if (!Array.isArray(content.children)) {
+      content.children = [];
+    }
   }
 
   return normalized;
@@ -622,7 +647,7 @@ export function generatePageFromPrompt(input: GeneratePageFromPromptInput): Gene
   const pageType = inferPageType(input);
   const scenario = inferScenario(prompt, pageType);
   const title = input.title?.trim() || buildTitle(prompt, pageType);
-  const slug = resolveSlug(input.slug, title, pageType);
+  const slug = resolveSlug(input.slug, prompt, title, pageType);
   const preset = pageType === "form"
     ? formPreset(title, prompt, scenario)
     : pageType === "table-list"
