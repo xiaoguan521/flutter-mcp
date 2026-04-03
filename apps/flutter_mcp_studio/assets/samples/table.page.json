@@ -1,0 +1,118 @@
+{
+  "slug": "table",
+  "title": "Table Demo",
+  "description": "MCP table demo with Antd-style custom table widget and stable resource saving.",
+  "definition": {
+    "type": "page",
+    "title": "Table Demo",
+    "state": {
+      "initial": {
+        "serviceRows": [
+          {
+            "service": "订单服务",
+            "owner": "交易中台",
+            "status": "healthy",
+            "latency": "86ms",
+            "slo": "99.95%"
+          },
+          {
+            "service": "库存服务",
+            "owner": "供应链平台",
+            "status": "watch",
+            "latency": "142ms",
+            "slo": "99.72%"
+          },
+          {
+            "service": "营销服务",
+            "owner": "增长团队",
+            "status": "degraded",
+            "latency": "211ms",
+            "slo": "98.91%"
+          }
+        ],
+        "statusBadge": "稳定版待发布"
+      }
+    },
+    "content": {
+      "type": "linear",
+      "direction": "vertical",
+      "gap": 16,
+      "children": [
+        {
+          "type": "antdSection",
+          "title": "服务质量矩阵",
+          "subtitle": "以 Ant Design 风格展示表格和标签态。",
+          "child": {
+            "type": "antdTable",
+            "columns": [
+              {
+                "key": "service",
+                "title": "服务"
+              },
+              {
+                "key": "owner",
+                "title": "Owner"
+              },
+              {
+                "key": "status",
+                "title": "状态"
+              },
+              {
+                "key": "latency",
+                "title": "P95 延迟"
+              },
+              {
+                "key": "slo",
+                "title": "SLO"
+              }
+            ],
+            "rows": {
+              "binding": "app.serviceRows"
+            }
+          }
+        },
+        {
+          "type": "antdSection",
+          "title": "版本动作",
+          "subtitle": "{{app.statusBadge}}",
+          "child": {
+            "type": "linear",
+            "direction": "horizontal",
+            "gap": 12,
+            "wrap": true,
+            "children": [
+              {
+                "type": "button",
+                "label": "标记已检查",
+                "variant": "outlined",
+                "click": {
+                  "type": "state",
+                  "action": "set",
+                  "binding": "app.statusBadge",
+                  "value": "已完成人工检查"
+                }
+              },
+              {
+                "type": "button",
+                "label": "固化表格页面",
+                "variant": "filled",
+                "backgroundColor": "#0f766e",
+                "click": {
+                  "type": "tool",
+                  "tool": "persistPage",
+                  "params": {
+                    "slug": "table",
+                    "title": "Table Demo",
+                    "description": "服务表格示例页面",
+                    "note": "Saved from table action"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}
+

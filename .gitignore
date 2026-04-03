@@ -1,0 +1,46 @@
+# Node / JS
+node_modules/
+dist/
+coverage/
+
+# Flutter / Dart
+.dart_tool/
+.packages
+.flutter-plugins
+.flutter-plugins-dependencies
+.fvm/
+.pub/
+.pub-cache/
+build/
+
+# IDE / OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Android / Gradle local files
+.gradle/
+.kotlin/
+**/local.properties
+*.jks
+*.keystore
+key.properties
+
+# Logs / temp
+*.log
+*.tmp
+server.err.log
+server.log
+
+# Local caches
+.codex-cache/
+
+# Local runtime data
+server/mcp-ui-server/data/*.sqlite
+server/mcp-ui-server/data/*.sqlite-shm
+server/mcp-ui-server/data/*.sqlite-wal
+
+# Keep placeholder files
+!.gitkeep

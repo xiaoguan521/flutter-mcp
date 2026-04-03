@@ -1,0 +1,176 @@
+{
+  "slug": "dashboard",
+  "title": "Dashboard Demo",
+  "description": "MCP dashboard demo with KPI cards, table, state actions, and in-page persistence.",
+  "definition": {
+    "type": "page",
+    "title": "Dashboard Demo",
+    "state": {
+      "initial": {
+        "selectedRegion": "north",
+        "kpiDelta": 8,
+        "dashboardRows": [
+          {
+            "metric": "订单成功率",
+            "owner": "交易组",
+            "status": "稳态",
+            "value": "99.41%"
+          },
+          {
+            "metric": "履约超时单",
+            "owner": "供应链组",
+            "status": "关注",
+            "value": "21 单"
+          },
+          {
+            "metric": "客诉工单",
+            "owner": "客服组",
+            "status": "稳定",
+            "value": "7 单"
+          }
+        ]
+      }
+    },
+    "content": {
+      "type": "linear",
+      "direction": "vertical",
+      "gap": 16,
+      "children": [
+        {
+          "type": "antdSection",
+          "title": "运营驾驶舱",
+          "subtitle": "一套 JSON DSL 配置同时供人工编辑与 AI/MCP 工具调用。",
+          "child": {
+            "type": "linear",
+            "direction": "horizontal",
+            "gap": 12,
+            "wrap": true,
+            "children": [
+              {
+                "type": "antdStat",
+                "title": "今日订单",
+                "value": "12,480",
+                "suffix": "单",
+                "trend": "+12%",
+                "tone": "teal"
+              },
+              {
+                "type": "antdStat",
+                "title": "支付成功率",
+                "value": "99.41",
+                "suffix": "%",
+                "trend": "+0.4%",
+                "tone": "blue"
+              },
+              {
+                "type": "antdStat",
+                "title": "待处理告警",
+                "value": "14",
+                "suffix": "条",
+                "trend": "-3",
+                "tone": "amber"
+              },
+              {
+                "type": "antdStat",
+                "title": "MCP 固化版本",
+                "value": "{{app.kpiDelta}}",
+                "suffix": "次",
+                "trend": "本页可直接固化",
+                "tone": "slate"
+              }
+            ]
+          }
+        },
+        {
+          "type": "antdSection",
+          "title": "控制面板",
+          "subtitle": "按钮演示 state 与 tool 两种动作。",
+          "child": {
+            "type": "linear",
+            "direction": "horizontal",
+            "gap": 12,
+            "wrap": true,
+            "children": [
+              {
+                "type": "select",
+                "label": "区域",
+                "binding": "app.selectedRegion",
+                "items": [
+                  {
+                    "value": "north",
+                    "label": "华北"
+                  },
+                  {
+                    "value": "east",
+                    "label": "华东"
+                  },
+                  {
+                    "value": "south",
+                    "label": "华南"
+                  }
+                ]
+              },
+              {
+                "type": "button",
+                "label": "刷新指标",
+                "variant": "outlined",
+                "click": {
+                  "type": "state",
+                  "action": "increment",
+                  "binding": "app.kpiDelta",
+                  "value": 1
+                }
+              },
+              {
+                "type": "button",
+                "label": "固化当前页面",
+                "variant": "filled",
+                "backgroundColor": "#0f766e",
+                "click": {
+                  "type": "tool",
+                  "tool": "persistPage",
+                  "params": {
+                    "slug": "dashboard",
+                    "title": "Dashboard Demo",
+                    "description": "运营驾驶舱示例页面",
+                    "note": "Saved from dashboard action"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "type": "antdSection",
+          "title": "任务看板",
+          "subtitle": "当前区域：{{app.selectedRegion}} | 变动系数：{{app.kpiDelta}}",
+          "child": {
+            "type": "antdTable",
+            "columns": [
+              {
+                "key": "metric",
+                "title": "指标"
+              },
+              {
+                "key": "owner",
+                "title": "责任组"
+              },
+              {
+                "key": "status",
+                "title": "状态"
+              },
+              {
+                "key": "value",
+                "title": "当前值"
+              }
+            ],
+            "rows": {
+              "binding": "app.dashboardRows"
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+

@@ -1,0 +1,158 @@
+import 'dart:convert';
+
+import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
+
+import '../models/page_models.dart';
+
+const String kDefaultServerUrl = String.fromEnvironment(
+  'MCP_UI_SERVER_URL',
+  defaultValue: 'http://127.0.0.1:8787',
+);
+
+class PageRepository {
+  PageRepository({
+    http.Client? client,
+    String? baseUrl,
+  })  : _client = client ?? http.Client(),
+        baseUrl = baseUrl ?? kDefaultServerUrl;
+
+  final http.Client _client;
+  final String baseUrl;
+
+  static const List<String> bundledSampleAssets = <String>[
+    'assets/samples/dashboard.page.json',
+    'assets/samples/form.page.json',
+    'assets/samples/table.page.json',
+  ];
+
+  Uri _uri(String path, [Map<String, String>? query]) {
+    return Uri.parse('$baseUrl$path').replace(queryParameters: query);
+  }
+
+  Future<List<PageSummaryModel>> listPages() async {
+    final response = await _client.get(_uri('/api/pages'));
+    final body = _decodeBody(response);
+    final result = body['result'] as List<dynamic>;
+    return result
+        .map((item) => PageSummaryModel.fromJson(
+              Map<String, dynamic>.from(item as Map),
+            ))
+        .toList();
+  }
+
+  Future<PageDocumentModel> loadPage(
+    String slug, {
+    String? version,
+  }) async {
+    final response = await _client.get(
+      _uri(
+        '/api/pages/$slug',
+        version == null ? null : <String, String>{'version': version},
+      ),
+    );
+    final body = _decodeBody(response);
+    return PageDocumentModel.fromJson(
+      Map<String, dynamic>.from(body['result'] as Map),
+    );
+  }
+
+  Future<List<PageVersionModel>> listVersions(String slug) async {
+    final response = await _client.get(_uri('/api/pages/$slug/versions'));
+    final body = _decodeBody(response);
+    final result = body['result'] as List<dynamic>;
+    return result
+        .map((item) => PageVersionModel.fromJson(
+              Map<String, dynamic>.from(item as Map),
+            ))
+        .toList();
+  }
+
+  Future<SaveResultModel> savePage({
+    required String slug,
+    required String title,
+    String? description,
+    String? note,
+    String? author,
+    bool makeStable = true,
+    required Map<String, dynamic> definition,
+  }) async {
+    final response = await _client.post(
+      _uri('/api/pages/$slug/save'),
+      headers: <String, String>{'content-type': 'application/json'},
+      body: jsonEncode(<String, dynamic>{
+        'title': title,
+        'description': description,
+        'note': note,
+        'author': author,
+        'makeStable': makeStable,
+        'definition': definition,
+      }),
+    );
+    final body = _decodeBody(response);
+    return SaveResultModel.fromJson(
+      Map<String, dynamic>.from(body['result'] as Map),
+    );
+  }
+
+  Future<Map<String, dynamic>> invokeTool(
+    String toolName,
+    Map<String, dynamic> payload,
+  ) async {
+    final response = await _client.post(
+      _uri('/api/tools/$toolName'),
+      headers: <String, String>{'content-type': 'application/json'},
+      body: jsonEncode(payload),
+    );
+    return _decodeBody(response);
+  }
+
+  Future<List<PageSummaryModel>> loadBundledPageSummaries() async {
+    final pages = await loadBundledPageDocuments();
+    return pages
+        .map(
+          (page) => PageSummaryModel(
+            slug: page.slug,
+            title: page.title,
+            description: page.description,
+            stableVersion: page.version ?? 'bundled',
+            updatedAt: page.updatedAt ?? '',
+            stableUri: page.stableUri ?? '',
+            versionUri: page.versionUri ?? '',
+            isBundled: true,
+          ),
+        )
+        .toList();
+  }
+
+  Future<List<PageDocumentModel>> loadBundledPageDocuments() async {
+    final documents = <PageDocumentModel>[];
+    for (final asset in bundledSampleAssets) {
+      final raw = await rootBundle.loadString(asset);
+      final json = Map<String, dynamic>.from(
+        jsonDecode(raw) as Map<String, dynamic>,
+      );
+      documents.add(PageDocumentModel.fromJson(json, isBundled: true));
+    }
+    return documents;
+  }
+
+  Future<PageDocumentModel?> loadBundledPage(String slug) async {
+    final pages = await loadBundledPageDocuments();
+    for (final page in pages) {
+      if (page.slug == slug) {
+        return page;
+      }
+    }
+    return null;
+  }
+
+  Map<String, dynamic> _decodeBody(http.Response response) {
+    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    if (response.statusCode >= 400 || decoded['success'] == false) {
+      throw Exception(decoded['error'] ?? 'Unexpected server error');
+    }
+    return decoded;
+  }
+}
+

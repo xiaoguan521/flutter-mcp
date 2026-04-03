@@ -1,0 +1,22 @@
+{
+  "name": "flutter-mcp-workspace",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Configurable Flutter MCP UI workspace with server, runtime app, and embed shells.",
+  "workspaces": [
+    "server/mcp-ui-server",
+    "apps/electron_shell"
+  ],
+  "scripts": {
+    "dev:server": "npm --workspace server/mcp-ui-server run dev",
+    "build:server": "npm --workspace server/mcp-ui-server run build",
+    "dev:electron": "npm --workspace apps/electron_shell run dev",
+    "build:electron": "npm --workspace apps/electron_shell run build",
+    "dev": "concurrently -k \"npm run dev:server\" \"npm run dev:electron\"",
+    "install:all": "npm install --workspaces"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
+
