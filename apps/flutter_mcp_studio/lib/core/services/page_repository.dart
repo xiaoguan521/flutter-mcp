@@ -41,6 +41,17 @@ class PageRepository {
         .toList();
   }
 
+  Future<List<PageTemplateModel>> listTemplates() async {
+    final response = await _client.get(_uri('/api/templates'));
+    final body = _decodeBody(response);
+    final result = body['result'] as List<dynamic>;
+    return result
+        .map((item) => PageTemplateModel.fromJson(
+              Map<String, dynamic>.from(item as Map),
+            ))
+        .toList();
+  }
+
   Future<PageDocumentModel> loadPage(
     String slug, {
     String? version,
@@ -93,6 +104,64 @@ class PageRepository {
     return SaveResultModel.fromJson(
       Map<String, dynamic>.from(body['result'] as Map),
     );
+  }
+
+  Future<GeneratedPageResultModel> generatePageFromPrompt({
+    required String prompt,
+    required String pageType,
+    String? seedTemplate,
+    String? locale,
+  }) async {
+    final response = await _client.post(
+      _uri('/api/tools/generate_page_from_prompt'),
+      headers: <String, String>{'content-type': 'application/json'},
+      body: jsonEncode(<String, dynamic>{
+        'prompt': prompt,
+        'pageType': pageType,
+        if (seedTemplate != null && seedTemplate.isNotEmpty)
+          'seedTemplate': seedTemplate,
+        if (locale != null && locale.isNotEmpty) 'locale': locale,
+      }),
+    );
+    final body = _decodeBody(response);
+    return GeneratedPageResultModel.fromJson(
+      Map<String, dynamic>.from(body['result'] as Map),
+    );
+  }
+
+  Future<PageValidationResultModel> validatePage(
+    Map<String, dynamic> definition,
+  ) async {
+    final response = await _client.post(
+      _uri('/api/tools/validate_page'),
+      headers: <String, String>{'content-type': 'application/json'},
+      body: jsonEncode(<String, dynamic>{
+        'definition': definition,
+      }),
+    );
+    final body = _decodeBody(response);
+    return PageValidationResultModel.fromJson(
+      Map<String, dynamic>.from(body['result'] as Map),
+    );
+  }
+
+  Future<List<ComponentCatalogItemModel>> listComponents({
+    bool recommendedOnly = false,
+  }) async {
+    final response = await _client.post(
+      _uri('/api/tools/list_components'),
+      headers: <String, String>{'content-type': 'application/json'},
+      body: jsonEncode(<String, dynamic>{
+        'recommendedOnly': recommendedOnly,
+      }),
+    );
+    final body = _decodeBody(response);
+    final result = body['result'] as List<dynamic>;
+    return result
+        .map((item) => ComponentCatalogItemModel.fromJson(
+              Map<String, dynamic>.from(item as Map),
+            ))
+        .toList();
   }
 
   Future<Map<String, dynamic>> invokeTool(
@@ -155,4 +224,3 @@ class PageRepository {
     return decoded;
   }
 }
-

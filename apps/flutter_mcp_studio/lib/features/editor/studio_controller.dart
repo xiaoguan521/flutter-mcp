@@ -23,6 +23,8 @@ class StudioController extends ChangeNotifier {
 
   bool isBusy = false;
   bool isSaving = false;
+  bool isGenerating = false;
+  bool isValidating = false;
   bool isUsingBundledFallback = false;
   bool isMcpConnected = false;
   String? error;
@@ -34,12 +36,19 @@ class StudioController extends ChangeNotifier {
 
   List<PageSummaryModel> pages = <PageSummaryModel>[];
   List<PageVersionModel> versions = <PageVersionModel>[];
+  List<PageTemplateModel> templates = <PageTemplateModel>[];
+  List<ComponentCatalogItemModel> componentCatalog =
+      <ComponentCatalogItemModel>[];
   PageDocumentModel? currentDocument;
+  GeneratedPageResultModel? lastGeneration;
+  PageValidationResultModel? validationResult;
 
   String get prettySource => const JsonEncoder.withIndent('  ')
       .convert(currentDocument?.definition ?? <String, dynamic>{});
 
   int get runtimeRevision => sourceRevision;
+
+  bool get canUseAiTools => !isUsingBundledFallback;
 
   List<Map<String, dynamic>> get contentBlocks {
     final definition = currentDocument?.definition;
@@ -62,6 +71,10 @@ class StudioController extends ChangeNotifier {
 
   Future<void> bootstrap() async {
     await refreshPages(selectFirst: true);
+    await _loadAiMetadata();
+    if (currentDocument != null && canUseAiTools) {
+      await validateCurrentPage(showStatus: false, replaceWithNormalized: true);
+    }
     isMcpConnected = await mcpBridgeService.ensureConnected(
       baseUrl: repository.baseUrl,
     );
@@ -88,6 +101,8 @@ class StudioController extends ChangeNotifier {
     } catch (_) {
       pages = await repository.loadBundledPageSummaries();
       isUsingBundledFallback = true;
+      templates = _defaultTemplates();
+      componentCatalog = <ComponentCatalogItemModel>[];
       statusMessage = '服务端不可用，已切换到内置样例';
     } finally {
       isBusy = false;
@@ -133,6 +148,7 @@ class StudioController extends ChangeNotifier {
       selectedSlug = slug;
       selectedVersion = version ?? document.version;
       currentDocument = document.copyWith(definition: _cloneMap(document.definition));
+      lastGeneration = null;
 
       if (isUsingBundledFallback) {
         versions = <PageVersionModel>[
@@ -153,6 +169,11 @@ class StudioController extends ChangeNotifier {
       }
 
       _bumpSource();
+      if (canUseAiTools) {
+        await validateCurrentPage(showStatus: false, replaceWithNormalized: true);
+      } else {
+        validationResult = null;
+      }
     } catch (loadError) {
       error = loadError.toString();
     } finally {
@@ -169,6 +190,7 @@ class StudioController extends ChangeNotifier {
       error = null;
       await _persistDraft();
       _bumpSource();
+      await validateCurrentPage(showStatus: true, replaceWithNormalized: true);
       notifyListeners();
     } catch (parseError) {
       error = 'JSON 解析失败：$parseError';
@@ -183,6 +205,7 @@ class StudioController extends ChangeNotifier {
     statusMessage = '已添加 $kind 组件块';
     await _persistDraft();
     _bumpSource();
+    await validateCurrentPage(showStatus: false, replaceWithNormalized: false);
     notifyListeners();
   }
 
@@ -195,6 +218,7 @@ class StudioController extends ChangeNotifier {
     statusMessage = '已删除组件块';
     await _persistDraft();
     _bumpSource();
+    await validateCurrentPage(showStatus: false, replaceWithNormalized: false);
     notifyListeners();
   }
 
@@ -208,6 +232,7 @@ class StudioController extends ChangeNotifier {
     statusMessage = '已重新排序组件块';
     await _persistDraft();
     _bumpSource();
+    await validateCurrentPage(showStatus: false, replaceWithNormalized: false);
     notifyListeners();
   }
 
@@ -224,7 +249,115 @@ class StudioController extends ChangeNotifier {
     draftUpdatedAt = draftStore.readDraftUpdatedAt(slug);
     statusMessage = '已恢复草稿';
     _bumpSource();
+    await validateCurrentPage(showStatus: false, replaceWithNormalized: false);
     notifyListeners();
+  }
+
+  Future<void> generatePageFromPrompt({
+    required String prompt,
+    required String pageType,
+    String? seedTemplate,
+    String? locale,
+  }) async {
+    final trimmedPrompt = prompt.trim();
+    if (trimmedPrompt.isEmpty) {
+      error = '请输入页面需求描述';
+      statusMessage = 'AI 生成失败';
+      notifyListeners();
+      return;
+    }
+
+    if (!canUseAiTools) {
+      error = '当前服务端不可用，暂时无法生成页面草稿';
+      statusMessage = 'AI 生成不可用';
+      notifyListeners();
+      return;
+    }
+
+    isGenerating = true;
+    error = null;
+    notifyListeners();
+
+    try {
+      final generated = await repository.generatePageFromPrompt(
+        prompt: trimmedPrompt,
+        pageType: pageType,
+        seedTemplate: seedTemplate,
+        locale: locale,
+      );
+
+      lastGeneration = generated;
+      currentDocument = PageDocumentModel(
+        slug: generated.slug,
+        title: generated.title,
+        description: generated.summary,
+        definition: _cloneMap(generated.definition),
+      );
+      selectedSlug = generated.slug;
+      selectedVersion = null;
+      versions = <PageVersionModel>[];
+      draftUpdatedAt = null;
+      await _persistDraft();
+      _bumpSource();
+      statusMessage = 'AI 页面草稿已生成';
+      await validateCurrentPage(showStatus: true, replaceWithNormalized: true);
+    } catch (generationError) {
+      error = generationError.toString();
+      statusMessage = 'AI 生成失败';
+    } finally {
+      isGenerating = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> validateCurrentPage({
+    bool showStatus = true,
+    bool replaceWithNormalized = false,
+  }) async {
+    final document = currentDocument;
+    if (document == null) {
+      validationResult = null;
+      return;
+    }
+
+    if (!canUseAiTools) {
+      validationResult = null;
+      return;
+    }
+
+    isValidating = true;
+    notifyListeners();
+
+    try {
+      final result = await repository.validatePage(document.definition);
+      validationResult = result;
+
+      if (replaceWithNormalized) {
+        currentDocument = document.copyWith(
+          definition: _cloneMap(result.normalizedDefinition),
+        );
+        _bumpSource();
+      }
+
+      if (showStatus) {
+        if (result.valid && result.warnings.isEmpty) {
+          statusMessage = '页面结构校验通过';
+        } else if (result.valid) {
+          statusMessage = '页面可渲染，但有 ${result.warnings.length} 条提示';
+        } else {
+          statusMessage = '页面校验失败：${result.errors.length} 个错误';
+        }
+      }
+    } catch (validationError) {
+      validationResult = null;
+      error = validationError.toString();
+      if (showStatus) {
+        statusMessage = '页面校验失败';
+      }
+    } finally {
+      isValidating = false;
+      notifyListeners();
+    }
   }
 
   Future<void> clearDraft() async {

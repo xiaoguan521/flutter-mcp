@@ -183,3 +183,191 @@ class SaveResultModel {
   }
 }
 
+class PageTemplateModel {
+  PageTemplateModel({
+    required this.slug,
+    required this.title,
+    this.description,
+  });
+
+  final String slug;
+  final String title;
+  final String? description;
+
+  factory PageTemplateModel.fromJson(Map<String, dynamic> json) {
+    return PageTemplateModel(
+      slug: json['slug'] as String,
+      title: json['title'] as String,
+      description: json['description'] as String?,
+    );
+  }
+}
+
+class ValidationIssueModel {
+  ValidationIssueModel({
+    required this.path,
+    required this.message,
+    this.suggestion,
+  });
+
+  final String path;
+  final String message;
+  final String? suggestion;
+
+  factory ValidationIssueModel.fromJson(Map<String, dynamic> json) {
+    return ValidationIssueModel(
+      path: json['path'] as String? ?? '',
+      message: json['message'] as String? ?? '',
+      suggestion: json['suggestion'] as String?,
+    );
+  }
+}
+
+class PageValidationResultModel {
+  PageValidationResultModel({
+    required this.valid,
+    required this.errors,
+    required this.warnings,
+    required this.normalizedDefinition,
+    required this.usedComponents,
+  });
+
+  final bool valid;
+  final List<ValidationIssueModel> errors;
+  final List<ValidationIssueModel> warnings;
+  final Map<String, dynamic> normalizedDefinition;
+  final List<String> usedComponents;
+
+  factory PageValidationResultModel.fromJson(Map<String, dynamic> json) {
+    return PageValidationResultModel(
+      valid: json['valid'] as bool? ?? false,
+      errors: (json['errors'] as List<dynamic>? ?? <dynamic>[])
+          .map(
+            (item) => ValidationIssueModel.fromJson(
+              Map<String, dynamic>.from(item as Map),
+            ),
+          )
+          .toList(),
+      warnings: (json['warnings'] as List<dynamic>? ?? <dynamic>[])
+          .map(
+            (item) => ValidationIssueModel.fromJson(
+              Map<String, dynamic>.from(item as Map),
+            ),
+          )
+          .toList(),
+      normalizedDefinition: Map<String, dynamic>.from(
+        json['normalizedDefinition'] as Map<String, dynamic>? ??
+            <String, dynamic>{},
+      ),
+      usedComponents: (json['usedComponents'] as List<dynamic>? ?? <dynamic>[])
+          .map((item) => item.toString())
+          .toList(),
+    );
+  }
+}
+
+class GeneratedPageResultModel {
+  GeneratedPageResultModel({
+    required this.slug,
+    required this.title,
+    required this.pageType,
+    required this.definition,
+    required this.summary,
+    required this.warnings,
+    required this.usedComponents,
+    required this.assumptions,
+    this.seedTemplate,
+  });
+
+  final String slug;
+  final String title;
+  final String pageType;
+  final String? seedTemplate;
+  final Map<String, dynamic> definition;
+  final String summary;
+  final List<String> warnings;
+  final List<String> usedComponents;
+  final List<String> assumptions;
+
+  factory GeneratedPageResultModel.fromJson(Map<String, dynamic> json) {
+    return GeneratedPageResultModel(
+      slug: json['slug'] as String,
+      title: json['title'] as String,
+      pageType: json['pageType'] as String? ?? 'dashboard',
+      seedTemplate: json['seedTemplate'] as String?,
+      definition: Map<String, dynamic>.from(
+        json['definition'] as Map<String, dynamic>,
+      ),
+      summary: json['summary'] as String? ?? '',
+      warnings: (json['warnings'] as List<dynamic>? ?? <dynamic>[])
+          .map((item) => item.toString())
+          .toList(),
+      usedComponents: (json['usedComponents'] as List<dynamic>? ?? <dynamic>[])
+          .map((item) => item.toString())
+          .toList(),
+      assumptions: (json['assumptions'] as List<dynamic>? ?? <dynamic>[])
+          .map((item) => item.toString())
+          .toList(),
+    );
+  }
+}
+
+class ComponentPropModel {
+  ComponentPropModel({
+    required this.name,
+    required this.type,
+    required this.description,
+    this.required = false,
+  });
+
+  final String name;
+  final String type;
+  final String description;
+  final bool required;
+
+  factory ComponentPropModel.fromJson(Map<String, dynamic> json) {
+    return ComponentPropModel(
+      name: json['name'] as String? ?? '',
+      type: json['type'] as String? ?? '',
+      description: json['description'] as String? ?? '',
+      required: json['required'] as bool? ?? false,
+    );
+  }
+}
+
+class ComponentCatalogItemModel {
+  ComponentCatalogItemModel({
+    required this.name,
+    required this.category,
+    required this.description,
+    required this.props,
+    required this.sample,
+    required this.recommendedForAi,
+  });
+
+  final String name;
+  final String category;
+  final String description;
+  final List<ComponentPropModel> props;
+  final Map<String, dynamic> sample;
+  final bool recommendedForAi;
+
+  factory ComponentCatalogItemModel.fromJson(Map<String, dynamic> json) {
+    return ComponentCatalogItemModel(
+      name: json['name'] as String? ?? '',
+      category: json['category'] as String? ?? '',
+      description: json['description'] as String? ?? '',
+      props: (json['props'] as List<dynamic>? ?? <dynamic>[])
+          .map(
+            (item) => ComponentPropModel.fromJson(
+              Map<String, dynamic>.from(item as Map),
+            ),
+          )
+          .toList(),
+      sample: Map<String, dynamic>.from(
+        json['sample'] as Map<String, dynamic>? ?? <String, dynamic>{},
+      ),
+      recommendedForAi: json['recommendedForAi'] as bool? ?? false,
+    );
+  }
+}

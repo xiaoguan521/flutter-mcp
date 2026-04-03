@@ -205,6 +205,62 @@ export function createHttpServer(options: {
             result,
           });
         }
+        case "generate_page_from_prompt": {
+          if (typeof payload.prompt !== "string" || payload.prompt.trim().length === 0) {
+            return jsonError(res, 400, "generate_page_from_prompt requires prompt.");
+          }
+
+          const result = await options.toolService.generatePageFromPrompt({
+            prompt: payload.prompt,
+            pageType:
+              typeof payload.pageType === "string" ? payload.pageType : undefined,
+            constraints:
+              payload.constraints && typeof payload.constraints === "object"
+                ? (payload.constraints as Record<string, unknown>)
+                : undefined,
+            seedTemplate:
+              typeof payload.seedTemplate === "string"
+                ? payload.seedTemplate
+                : undefined,
+            locale: typeof payload.locale === "string" ? payload.locale : undefined,
+            slug: typeof payload.slug === "string" ? payload.slug : undefined,
+            title: typeof payload.title === "string" ? payload.title : undefined,
+          });
+
+          return res.json({
+            success: true,
+            result,
+          });
+        }
+        case "validate_page": {
+          if (!payload.definition || typeof payload.definition !== "object") {
+            return jsonError(res, 400, "validate_page requires definition.");
+          }
+
+          const result = await options.toolService.validatePage({
+            definition: payload.definition as Record<string, unknown>,
+          });
+
+          return res.json({
+            success: true,
+            result,
+          });
+        }
+        case "list_components": {
+          const result = await options.toolService.listComponents({
+            category:
+              typeof payload.category === "string" ? payload.category : undefined,
+            recommendedOnly:
+              typeof payload.recommendedOnly === "boolean"
+                ? payload.recommendedOnly
+                : undefined,
+          });
+
+          return res.json({
+            success: true,
+            result,
+          });
+        }
         case "resolve_resource_uri": {
           if (typeof payload.uri !== "string") {
             return jsonError(res, 400, "resolve_resource_uri requires uri.");
@@ -281,4 +337,3 @@ export function createHttpServer(options: {
 
   return app;
 }
-

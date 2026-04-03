@@ -82,6 +82,70 @@ export interface GeneratePageInput {
   title?: string;
 }
 
+export interface GeneratePageFromPromptInput {
+  [key: string]: unknown;
+  prompt: string;
+  pageType?: string;
+  constraints?: JsonObject;
+  seedTemplate?: string;
+  locale?: string;
+  slug?: string;
+  title?: string;
+}
+
+export interface GeneratedPageResult {
+  [key: string]: unknown;
+  slug: string;
+  title: string;
+  pageType: string;
+  seedTemplate?: string;
+  definition: JsonObject;
+  summary: string;
+  warnings: string[];
+  usedComponents: string[];
+  assumptions: string[];
+}
+
+export interface ValidationIssue {
+  [key: string]: unknown;
+  path: string;
+  message: string;
+  suggestion?: string;
+}
+
+export interface ValidatePageResult {
+  [key: string]: unknown;
+  valid: boolean;
+  errors: ValidationIssue[];
+  warnings: ValidationIssue[];
+  normalizedDefinition: JsonObject;
+  usedComponents: string[];
+}
+
+export interface ListComponentsInput {
+  [key: string]: unknown;
+  category?: string;
+  recommendedOnly?: boolean;
+}
+
+export interface ComponentPropDefinition {
+  [key: string]: unknown;
+  name: string;
+  type: string;
+  required?: boolean;
+  description: string;
+}
+
+export interface ComponentCatalogItem {
+  [key: string]: unknown;
+  name: string;
+  category: string;
+  description: string;
+  props: ComponentPropDefinition[];
+  sample: JsonObject;
+  recommendedForAi: boolean;
+}
+
 export interface AppConfig {
   host: string;
   port: number;

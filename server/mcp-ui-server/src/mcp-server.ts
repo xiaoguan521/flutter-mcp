@@ -138,6 +138,88 @@ export function createMcpUiServer(options: {
   );
 
   server.registerTool(
+    "generate_page_from_prompt",
+    {
+      title: "Generate page from prompt",
+      description:
+        "Generate a renderable page DSL draft from a natural-language request.",
+      inputSchema: {
+        prompt: z.string().min(1),
+        pageType: z.enum(["dashboard", "form", "table-list"]).optional(),
+        constraints: z.record(z.string(), z.unknown()).optional(),
+        seedTemplate: z.string().optional(),
+        locale: z.string().optional(),
+        slug: z.string().optional(),
+        title: z.string().optional(),
+      },
+    },
+    async ({ prompt, pageType, constraints, seedTemplate, locale, slug, title }) => {
+      const result = await options.toolService.generatePageFromPrompt({
+        prompt,
+        pageType,
+        constraints,
+        seedTemplate,
+        locale,
+        slug,
+        title,
+      });
+
+      return {
+        content: [asTextBlock(result)],
+        structuredContent: result,
+      };
+    },
+  );
+
+  server.registerTool(
+    "validate_page",
+    {
+      title: "Validate page DSL",
+      description:
+        "Validate a page definition against the supported Sprint 1 schema subset.",
+      inputSchema: {
+        definition: z.record(z.string(), z.unknown()),
+      },
+    },
+    async ({ definition }) => {
+      const result = await options.toolService.validatePage({
+        definition,
+      });
+
+      return {
+        content: [asTextBlock(result)],
+        structuredContent: result,
+      };
+    },
+  );
+
+  server.registerTool(
+    "list_components",
+    {
+      title: "List supported components",
+      description:
+        "Return the supported component catalog and metadata for AI or Studio.",
+      inputSchema: {
+        category: z.string().optional(),
+        recommendedOnly: z.boolean().optional(),
+      },
+    },
+    async ({ category, recommendedOnly }) => {
+      const result = await options.toolService.listComponents({
+        category,
+        recommendedOnly,
+      });
+
+      return {
+        content: [asTextBlock(result)],
+        structuredContent: {
+          components: result,
+        },
+      };
+    },
+  );
+
+  server.registerTool(
     "resolve_resource_uri",
     {
       title: "Resolve resource URI",
@@ -264,4 +346,3 @@ export function createMcpUiServer(options: {
 
   return server;
 }
-

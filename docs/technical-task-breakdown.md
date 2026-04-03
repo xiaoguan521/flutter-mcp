@@ -593,3 +593,17 @@
 6. 设计 `build_web` / `build_android_debug` 的 MCP 接口
 
 这组任务能最快把项目从“可编辑 Demo”推进到“AI 构建平台”的下一阶段。
+
+## 12. 对应 Sprint 清单
+
+为了把本文件中的阶段性任务进一步落实到可执行层，当前已经补充第一期 Sprint 文档：
+
+- [sprint-1-task-list.md](M:\flutter-mcp\docs\sprint-1-task-list.md)
+
+这份 Sprint 文档重点覆盖：
+
+- `AI 单页生成 MVP`
+- 页面生成与校验类 MCP tools
+- Studio Prompt 工作流
+- Runtime 对三类页面的兼容性补齐
+- 本期验收用例与完成标准

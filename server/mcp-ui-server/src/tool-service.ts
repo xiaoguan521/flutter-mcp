@@ -1,10 +1,20 @@
 import type {
+  ComponentCatalogItem,
   GeneratePageInput,
+  GeneratePageFromPromptInput,
+  GeneratedPageResult,
   JsonObject,
+  ListComponentsInput,
   PageStore,
   SavePageInput,
   SeedPage,
+  ValidatePageResult,
 } from "./types.js";
+import {
+  generatePageFromPrompt,
+  listComponentCatalog,
+  validatePageDefinition,
+} from "./page-tools.js";
 import { normalizeSlug } from "./uri.js";
 
 function cloneJson<T>(value: T): T {
@@ -55,5 +65,20 @@ export class ToolService {
       definition,
     };
   }
-}
 
+  async generatePageFromPrompt(
+    input: GeneratePageFromPromptInput,
+  ): Promise<GeneratedPageResult> {
+    return generatePageFromPrompt(input);
+  }
+
+  async validatePage(input: { definition: JsonObject }): Promise<ValidatePageResult> {
+    return validatePageDefinition(input.definition);
+  }
+
+  async listComponents(
+    input: ListComponentsInput = {},
+  ): Promise<ComponentCatalogItem[]> {
+    return listComponentCatalog(input);
+  }
+}
