@@ -33,6 +33,23 @@ export interface PageSnapshot {
   definition: JsonObject;
 }
 
+export interface AppSnapshot {
+  [key: string]: unknown;
+  appId: string;
+  slug: string;
+  name: string;
+  description?: string;
+  version: string;
+  author: string;
+  note?: string;
+  isStable: boolean;
+  createdAt: string;
+  updatedAt: string;
+  stableUri: string;
+  versionUri: string;
+  schema: JsonObject;
+}
+
 export interface PageSummary {
   [key: string]: unknown;
   slug: string;
@@ -44,10 +61,35 @@ export interface PageSummary {
   versionUri: string;
 }
 
+export interface AppSummary {
+  [key: string]: unknown;
+  slug: string;
+  name: string;
+  description?: string;
+  stableVersion: string;
+  updatedAt: string;
+  stableUri: string;
+  versionUri: string;
+  homePage?: string;
+}
+
 export interface PageVersionSummary {
   [key: string]: unknown;
   slug: string;
   title: string;
+  version: string;
+  createdAt: string;
+  isStable: boolean;
+  note?: string;
+  author: string;
+  stableUri: string;
+  versionUri: string;
+}
+
+export interface AppVersionSummary {
+  [key: string]: unknown;
+  slug: string;
+  name: string;
   version: string;
   createdAt: string;
   isStable: boolean;
@@ -75,11 +117,47 @@ export interface SavePageResult {
   versionUri: string;
 }
 
+export interface SaveAppInput {
+  [key: string]: unknown;
+  slug: string;
+  name: string;
+  description?: string;
+  author?: string;
+  note?: string;
+  makeStable?: boolean;
+  schema: JsonObject;
+}
+
+export interface SaveAppResult {
+  [key: string]: unknown;
+  app: AppSnapshot;
+  stableUri: string;
+  versionUri: string;
+}
+
 export interface GeneratePageInput {
   [key: string]: unknown;
   template: string;
   slug?: string;
   title?: string;
+}
+
+export interface CreateAppInput {
+  [key: string]: unknown;
+  name: string;
+  slug?: string;
+  description?: string;
+  pageSlugs?: string[];
+  navigationStyle?: string;
+  author?: string;
+}
+
+export interface CreateAppResult {
+  [key: string]: unknown;
+  app: AppSnapshot;
+  stableUri: string;
+  versionUri: string;
+  warnings: string[];
 }
 
 export interface GeneratePageFromPromptInput {
@@ -156,6 +234,14 @@ export interface ValidatePageResult {
   usedComponents: string[];
 }
 
+export interface ValidateAppResult {
+  [key: string]: unknown;
+  valid: boolean;
+  errors: ValidationIssue[];
+  warnings: ValidationIssue[];
+  normalizedSchema: JsonObject;
+}
+
 export interface ListComponentsInput {
   [key: string]: unknown;
   category?: string;
@@ -192,6 +278,8 @@ export interface AppConfig {
   mcpEndpoint: string;
 }
 
+export type ResourceSnapshot = PageSnapshot | AppSnapshot;
+
 export interface PageStore {
   initialize(): Promise<void>;
   seedPages(pages: SeedPage[]): Promise<void>;
@@ -199,6 +287,10 @@ export interface PageStore {
   listVersions(slug: string): Promise<PageVersionSummary[]>;
   getPage(slug: string, version?: string): Promise<PageSnapshot | null>;
   savePage(input: SavePageInput): Promise<SavePageResult>;
-  resolveUri(uri: string): Promise<PageSnapshot | null>;
+  listApps(): Promise<AppSummary[]>;
+  listAppVersions(slug: string): Promise<AppVersionSummary[]>;
+  getApp(slug: string, version?: string): Promise<AppSnapshot | null>;
+  saveApp(input: SaveAppInput): Promise<SaveAppResult>;
+  resolveUri(uri: string): Promise<ResourceSnapshot | null>;
   close(): Promise<void>;
 }

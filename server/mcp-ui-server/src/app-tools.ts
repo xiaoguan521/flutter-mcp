@@ -1,0 +1,289 @@
+import { normalizeSlug } from "./uri.js";
+import type {
+  CreateAppInput,
+  ValidateAppResult,
+  ValidationIssue,
+  JsonObject,
+} from "./types.js";
+
+type AppPageSeed = {
+  slug: string;
+  title: string;
+  pageUri: string;
+};
+
+function pushIssue(
+  target: ValidationIssue[],
+  path: string,
+  message: string,
+  suggestion?: string,
+): void {
+  target.push({ path, message, suggestion });
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function defaultBuildProfiles(): JsonObject[] {
+  return [
+    {
+      id: "web-debug",
+      target: "web",
+      mode: "debug",
+    },
+    {
+      id: "android-debug",
+      target: "android",
+      mode: "debug",
+    },
+  ];
+}
+
+export function createAppSchema(
+  input: CreateAppInput,
+  pages: AppPageSeed[],
+): JsonObject {
+  const slug = normalizeSlug(input.slug ?? input.name);
+  const navigationStyle = typeof input.navigationStyle === "string"
+    && input.navigationStyle.trim().length > 0
+    ? input.navigationStyle.trim()
+    : "sidebar";
+  const resolvedPages = pages.map((page) => ({
+    slug: normalizeSlug(page.slug),
+    title: page.title,
+    pageUri: page.pageUri,
+  }));
+  const routes = resolvedPages.map((page, index) => ({
+    id: `route-${page.slug}`,
+    path: index === 0 ? "/" : `/${page.slug}`,
+    pageSlug: page.slug,
+    pageUri: page.pageUri,
+    title: page.title,
+  }));
+
+  return {
+    type: "app",
+    appId: `app-${slug}`,
+    slug,
+    name: input.name.trim(),
+    description: input.description?.trim() || undefined,
+    theme: {
+      mode: "light",
+      primaryColor: "#0f766e",
+    },
+    layoutShell: {
+      type: navigationStyle === "tabs"
+        ? "tabsShell"
+        : navigationStyle === "topbar"
+        ? "topNavShell"
+        : "sidebarShell",
+      navigationStyle,
+    },
+    pages: resolvedPages,
+    routes,
+    navigation: routes.map((route) => ({
+      label: route.title,
+      route: route.path,
+      pageSlug: route.pageSlug,
+    })),
+    homePage: resolvedPages[0]?.slug,
+    auth: {
+      required: false,
+    },
+    globalState: {
+      initial: {},
+    },
+    dataSources: [],
+    buildProfiles: defaultBuildProfiles(),
+  };
+}
+
+export function validateAppSchema(schema: JsonObject): ValidateAppResult {
+  const normalized = JSON.parse(JSON.stringify(schema)) as JsonObject;
+  const errors: ValidationIssue[] = [];
+  const warnings: ValidationIssue[] = [];
+
+  normalized.type = "app";
+  if (typeof normalized.slug !== "string" || normalized.slug.trim().length === 0) {
+    const fallback = typeof normalized.name === "string"
+      ? normalizeSlug(normalized.name)
+      : "app";
+    normalized.slug = fallback || "app";
+    pushIssue(
+      warnings,
+      "slug",
+      "App slug is missing.",
+      "The server normalized it from the app name.",
+    );
+  } else {
+    normalized.slug = normalizeSlug(normalized.slug);
+  }
+
+  if (typeof normalized.appId !== "string" || normalized.appId.trim().length === 0) {
+    normalized.appId = `app-${normalized.slug}`;
+  }
+
+  if (typeof normalized.name !== "string" || normalized.name.trim().length === 0) {
+    normalized.name = "Untitled App";
+    pushIssue(
+      errors,
+      "name",
+      "App name is required.",
+      "Provide a non-empty name for the application.",
+    );
+  }
+
+  if (!isObject(normalized.theme)) {
+    normalized.theme = { mode: "light", primaryColor: "#0f766e" };
+    pushIssue(
+      warnings,
+      "theme",
+      "App theme is missing.",
+      "The server normalized it to the default light theme.",
+    );
+  }
+
+  if (!isObject(normalized.layoutShell)) {
+    normalized.layoutShell = {
+      type: "sidebarShell",
+      navigationStyle: "sidebar",
+    };
+    pushIssue(
+      warnings,
+      "layoutShell",
+      "App layout shell is missing.",
+      "The server normalized it to the default sidebar shell.",
+    );
+  }
+
+  if (!Array.isArray(normalized.pages)) {
+    normalized.pages = [];
+    pushIssue(
+      warnings,
+      "pages",
+      "App pages are missing.",
+      "The server normalized pages to an empty array.",
+    );
+  }
+
+  if (!Array.isArray(normalized.routes)) {
+    normalized.routes = [];
+    pushIssue(
+      warnings,
+      "routes",
+      "App routes are missing.",
+      "The server normalized routes to an empty array.",
+    );
+  }
+
+  if (!Array.isArray(normalized.navigation)) {
+    normalized.navigation = [];
+    pushIssue(
+      warnings,
+      "navigation",
+      "App navigation is missing.",
+      "The server normalized navigation to an empty array.",
+    );
+  }
+
+  if (!Array.isArray(normalized.buildProfiles)) {
+    normalized.buildProfiles = defaultBuildProfiles();
+    pushIssue(
+      warnings,
+      "buildProfiles",
+      "Build profiles are missing.",
+      "The server normalized buildProfiles to default debug targets.",
+    );
+  }
+
+  const pages = normalized.pages as unknown[];
+  const pageSlugs = new Set<string>();
+  pages.forEach((page, index) => {
+    if (!isObject(page)) {
+      pushIssue(errors, `pages[${index}]`, "Each page entry must be an object.");
+      return;
+    }
+
+    if (typeof page.slug !== "string" || page.slug.trim().length === 0) {
+      pushIssue(errors, `pages[${index}].slug`, "Page entry slug is required.");
+      return;
+    }
+    page.slug = normalizeSlug(page.slug);
+    pageSlugs.add(page.slug);
+
+    if (typeof page.pageUri !== "string" || page.pageUri.trim().length === 0) {
+      pushIssue(
+        errors,
+        `pages[${index}].pageUri`,
+        "Page entry pageUri is required.",
+      );
+    }
+  });
+
+  const routes = normalized.routes as unknown[];
+  routes.forEach((route, index) => {
+    if (!isObject(route)) {
+      pushIssue(errors, `routes[${index}]`, "Each route entry must be an object.");
+      return;
+    }
+    if (typeof route.path !== "string" || route.path.trim().length === 0) {
+      pushIssue(errors, `routes[${index}].path`, "Route path is required.");
+    } else if (!route.path.startsWith("/")) {
+      pushIssue(
+        errors,
+        `routes[${index}].path`,
+        "Route path must start with '/'.",
+      );
+    }
+
+    if (typeof route.pageSlug !== "string" || route.pageSlug.trim().length === 0) {
+      pushIssue(errors, `routes[${index}].pageSlug`, "Route pageSlug is required.");
+      return;
+    }
+    route.pageSlug = normalizeSlug(route.pageSlug);
+    if (!pageSlugs.has(route.pageSlug)) {
+      pushIssue(
+        warnings,
+        `routes[${index}].pageSlug`,
+        `Route references missing page "${route.pageSlug}".`,
+        "Add the page to the pages list or update the route reference.",
+      );
+    }
+  });
+
+  if (
+    typeof normalized.homePage !== "string"
+    || normalized.homePage.trim().length === 0
+  ) {
+    const fallback = (normalized.pages as Array<Record<string, unknown>>)[0]?.slug;
+    if (typeof fallback === "string" && fallback.length > 0) {
+      normalized.homePage = fallback;
+      pushIssue(
+        warnings,
+        "homePage",
+        "App homePage is missing.",
+        "The server normalized it to the first page slug.",
+      );
+    }
+  } else {
+    normalized.homePage = normalizeSlug(normalized.homePage);
+  }
+
+  if (!isObject(normalized.auth)) {
+    normalized.auth = { required: false };
+  }
+  if (!isObject(normalized.globalState)) {
+    normalized.globalState = { initial: {} };
+  }
+  if (!Array.isArray(normalized.dataSources)) {
+    normalized.dataSources = [];
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+    warnings,
+    normalizedSchema: normalized,
+  };
+}

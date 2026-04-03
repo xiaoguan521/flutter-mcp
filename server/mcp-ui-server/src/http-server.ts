@@ -51,8 +51,26 @@ export function createHttpServer(options: {
     });
   });
 
+  app.get("/api/apps", async (_req, res) => {
+    const apps = await options.toolService.listApps();
+    res.json({
+      success: true,
+      result: apps,
+    });
+  });
+
   app.get("/api/pages/:slug/versions", async (req, res) => {
     const versions = await options.toolService.listVersions({
+      slug: req.params.slug,
+    });
+    res.json({
+      success: true,
+      result: versions,
+    });
+  });
+
+  app.get("/api/apps/:slug/versions", async (req, res) => {
+    const versions = await options.toolService.listAppVersions({
       slug: req.params.slug,
     });
     res.json({
@@ -75,6 +93,23 @@ export function createHttpServer(options: {
     return res.json({
       success: true,
       result: page,
+    });
+  });
+
+  app.get("/api/apps/:slug", async (req, res) => {
+    const appSnapshot = await options.toolService.loadApp({
+      slug: req.params.slug,
+      version:
+        typeof req.query.version === "string" ? req.query.version : undefined,
+    });
+
+    if (!appSnapshot) {
+      return jsonError(res, 404, `App not found: ${req.params.slug}`);
+    }
+
+    return res.json({
+      success: true,
+      result: appSnapshot,
     });
   });
 
@@ -112,6 +147,40 @@ export function createHttpServer(options: {
     });
   });
 
+  app.post("/api/apps/:slug/save", async (req, res) => {
+    const body = req.body as Record<string, unknown>;
+    if (!body || typeof body !== "object") {
+      return jsonError(res, 400, "JSON body is required.");
+    }
+
+    const schema = body.schema;
+    if (!schema || typeof schema !== "object") {
+      return jsonError(res, 400, "schema must be a JSON object.");
+    }
+
+    const name =
+      typeof body.name === "string" && body.name.trim().length > 0
+        ? body.name
+        : req.params.slug;
+
+    const result = await options.toolService.saveApp({
+      slug: req.params.slug,
+      name,
+      description:
+        typeof body.description === "string" ? body.description : undefined,
+      author: typeof body.author === "string" ? body.author : undefined,
+      note: typeof body.note === "string" ? body.note : undefined,
+      makeStable:
+        typeof body.makeStable === "boolean" ? body.makeStable : undefined,
+      schema: schema as Record<string, unknown>,
+    });
+
+    return res.status(201).json({
+      success: true,
+      result,
+    });
+  });
+
   app.get("/api/resources/resolve", async (req, res) => {
     const uri = typeof req.query.uri === "string" ? req.query.uri : undefined;
     if (!uri) {
@@ -141,6 +210,12 @@ export function createHttpServer(options: {
             result: await options.toolService.listPages(),
           });
         }
+        case "list_apps": {
+          return res.json({
+            success: true,
+            result: await options.toolService.listApps(),
+          });
+        }
         case "load_page": {
           const result = await options.toolService.loadPage({
             slug: String(payload.slug ?? ""),
@@ -149,6 +224,21 @@ export function createHttpServer(options: {
           });
           if (!result) {
             return jsonError(res, 404, `Page not found: ${String(payload.slug)}`);
+          }
+
+          return res.json({
+            success: true,
+            result,
+          });
+        }
+        case "load_app": {
+          const result = await options.toolService.loadApp({
+            slug: String(payload.slug ?? ""),
+            version:
+              typeof payload.version === "string" ? payload.version : undefined,
+          });
+          if (!result) {
+            return jsonError(res, 404, `App not found: ${String(payload.slug)}`);
           }
 
           return res.json({
@@ -188,6 +278,70 @@ export function createHttpServer(options: {
           });
 
           return res.json({
+            success: true,
+            result,
+          });
+        }
+        case "save_app_version": {
+          if (
+            !payload.schema ||
+            typeof payload.schema !== "object" ||
+            typeof payload.slug !== "string" ||
+            typeof payload.name !== "string"
+          ) {
+            return jsonError(
+              res,
+              400,
+              "save_app_version requires slug, name, and schema.",
+            );
+          }
+
+          const result = await options.toolService.saveApp({
+            slug: payload.slug,
+            name: payload.name,
+            description:
+              typeof payload.description === "string"
+                ? payload.description
+                : undefined,
+            author:
+              typeof payload.author === "string" ? payload.author : undefined,
+            note: typeof payload.note === "string" ? payload.note : undefined,
+            makeStable:
+              typeof payload.makeStable === "boolean"
+                ? payload.makeStable
+                : undefined,
+            schema: payload.schema as Record<string, unknown>,
+          });
+
+          return res.json({
+            success: true,
+            result,
+          });
+        }
+        case "create_app": {
+          if (typeof payload.name !== "string" || payload.name.trim().length === 0) {
+            return jsonError(res, 400, "create_app requires name.");
+          }
+
+          const result = await options.toolService.createApp({
+            name: payload.name,
+            slug: typeof payload.slug === "string" ? payload.slug : undefined,
+            description:
+              typeof payload.description === "string"
+                ? payload.description
+                : undefined,
+            pageSlugs: Array.isArray(payload.pageSlugs)
+              ? payload.pageSlugs
+                  .filter((item): item is string => typeof item === "string")
+              : undefined,
+            navigationStyle:
+              typeof payload.navigationStyle === "string"
+                ? payload.navigationStyle
+                : undefined,
+            author: typeof payload.author === "string" ? payload.author : undefined,
+          });
+
+          return res.status(201).json({
             success: true,
             result,
           });

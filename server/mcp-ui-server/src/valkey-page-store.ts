@@ -2,6 +2,8 @@ import { createClient, type RedisClientType } from "redis";
 
 import { BasePageStore } from "./page-store.js";
 import {
+  buildAppStableUri,
+  buildAppVersionUri,
   buildStableUri,
   buildVersionId,
   buildVersionUri,
@@ -9,9 +11,14 @@ import {
   parseResourceUri,
 } from "./uri.js";
 import type {
+  AppSnapshot,
+  AppSummary,
+  AppVersionSummary,
   PageSnapshot,
   PageSummary,
   PageVersionSummary,
+  SaveAppInput,
+  SaveAppResult,
   SavePageInput,
   SavePageResult,
   SeedPage,
@@ -182,13 +189,145 @@ export class ValkeyPageStore extends BasePageStore {
     };
   }
 
-  async resolveUri(uri: string): Promise<PageSnapshot | null> {
+  async listApps(): Promise<AppSummary[]> {
+    const slugs = await this.client.sMembers(this.key("apps:index"));
+    const apps: AppSummary[] = [];
+
+    for (const slug of slugs.sort()) {
+      const stableVersion = await this.client.get(this.key(`apps:${slug}:stable`));
+      if (!stableVersion) {
+        continue;
+      }
+
+      const app = await this.getApp(slug, stableVersion);
+      if (!app) {
+        continue;
+      }
+
+      apps.push({
+        slug: app.slug,
+        name: app.name,
+        description: app.description,
+        stableVersion: app.version,
+        updatedAt: app.updatedAt,
+        stableUri: app.stableUri,
+        versionUri: app.versionUri,
+        homePage:
+          typeof app.schema.homePage === "string" ? app.schema.homePage : undefined,
+      });
+    }
+
+    return apps;
+  }
+
+  async listAppVersions(slug: string): Promise<AppVersionSummary[]> {
+    const normalizedSlug = normalizeSlug(slug);
+    const versionIds = await this.client.zRange(
+      this.key(`apps:${normalizedSlug}:versions`),
+      0,
+      -1,
+      { REV: true },
+    );
+
+    const stableVersion = await this.client.get(
+      this.key(`apps:${normalizedSlug}:stable`),
+    );
+
+    const versions: AppVersionSummary[] = [];
+    for (const versionId of versionIds) {
+      const app = await this.getApp(normalizedSlug, versionId);
+      if (!app) {
+        continue;
+      }
+
+      versions.push({
+        slug: app.slug,
+        name: app.name,
+        version: app.version,
+        createdAt: app.createdAt,
+        isStable: stableVersion === app.version,
+        note: app.note,
+        author: app.author,
+        stableUri: app.stableUri,
+        versionUri: app.versionUri,
+      });
+    }
+
+    return versions;
+  }
+
+  async getApp(slug: string, version?: string): Promise<AppSnapshot | null> {
+    const normalizedSlug = normalizeSlug(slug);
+    const resolvedVersion =
+      version ??
+      (await this.client.get(this.key(`apps:${normalizedSlug}:stable`)));
+
+    if (!resolvedVersion) {
+      return null;
+    }
+
+    const raw = await this.client.get(
+      this.key(`apps:${normalizedSlug}:version:${resolvedVersion}`),
+    );
+
+    return raw ? (JSON.parse(raw) as AppSnapshot) : null;
+  }
+
+  async saveApp(input: SaveAppInput): Promise<SaveAppResult> {
+    const slug = normalizeSlug(input.slug);
+    const version = buildVersionId();
+    const timestamp = Date.now();
+    const snapshot: AppSnapshot = {
+      appId: typeof input.schema.appId === "string" && input.schema.appId.trim().length > 0
+        ? input.schema.appId
+        : `app-${slug}`,
+      slug,
+      name: input.name,
+      description: input.description,
+      version,
+      author: input.author ?? "studio",
+      note: input.note,
+      isStable: input.makeStable ?? true,
+      createdAt: new Date(timestamp).toISOString(),
+      updatedAt: new Date(timestamp).toISOString(),
+      stableUri: buildAppStableUri(slug),
+      versionUri: buildAppVersionUri(slug, version),
+      schema: input.schema,
+    };
+
+    const multi = this.client.multi();
+    multi.sAdd(this.key("apps:index"), slug);
+    multi.zAdd(this.key(`apps:${slug}:versions`), {
+      score: timestamp,
+      value: version,
+    });
+    multi.set(
+      this.key(`apps:${slug}:version:${version}`),
+      JSON.stringify(snapshot),
+    );
+
+    if (snapshot.isStable) {
+      multi.set(this.key(`apps:${slug}:stable`), version);
+    }
+
+    await multi.exec();
+
+    return {
+      app: snapshot,
+      stableUri: snapshot.stableUri,
+      versionUri: snapshot.versionUri,
+    };
+  }
+
+  async resolveUri(uri: string): Promise<PageSnapshot | AppSnapshot | null> {
     const parsed = parseResourceUri(uri);
     if (!parsed) {
       return null;
     }
 
-    return this.getPage(parsed.slug, parsed.version);
+    return parsed.kind === "app"
+      ? this.getApp(parsed.slug, parsed.version)
+      : this.getPage(parsed.slug, parsed.version);
   }
 
   async close(): Promise<void> {
@@ -201,4 +340,3 @@ export class ValkeyPageStore extends BasePageStore {
     return `${this.namespace}:${value}`;
   }
 }
-

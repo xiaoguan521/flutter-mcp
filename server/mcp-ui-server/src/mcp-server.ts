@@ -1,9 +1,14 @@
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
-import { buildStableUri, buildVersionUri } from "./uri.js";
+import {
+  buildAppStableUri,
+  buildAppVersionUri,
+  buildStableUri,
+  buildVersionUri,
+} from "./uri.js";
 import { ToolService } from "./tool-service.js";
-import type { PageStore, PageSummary, SeedPage } from "./types.js";
+import type { AppSummary, PageStore, PageSummary, SeedPage } from "./types.js";
 
 function asTextBlock(value: unknown) {
   return {
@@ -19,6 +24,16 @@ function pageResourceFromSummary(page: PageSummary) {
     uri: page.stableUri,
     mimeType: "application/vnd.mcp-ui+json",
     description: page.description,
+  };
+}
+
+function appResourceFromSummary(app: AppSummary) {
+  return {
+    name: app.name,
+    title: app.name,
+    uri: app.stableUri,
+    mimeType: "application/vnd.mcp-ui-app+json",
+    description: app.description,
   };
 }
 
@@ -45,6 +60,23 @@ export function createMcpUiServer(options: {
         content: [asTextBlock(pages)],
         structuredContent: {
           pages,
+        },
+      };
+    },
+  );
+
+  server.registerTool(
+    "list_apps",
+    {
+      title: "List saved apps",
+      description: "List stable MCP UI app schemas currently available to load.",
+    },
+    async () => {
+      const apps = await options.toolService.listApps();
+      return {
+        content: [asTextBlock(apps)],
+        structuredContent: {
+          apps,
         },
       };
     },
@@ -78,6 +110,33 @@ export function createMcpUiServer(options: {
   );
 
   server.registerTool(
+    "load_app",
+    {
+      title: "Load app schema",
+      description:
+        "Load the stable app schema or a specific immutable app version.",
+      inputSchema: {
+        slug: z.string().min(1),
+        version: z.string().optional(),
+      },
+    },
+    async ({ slug, version }) => {
+      const app = await options.toolService.loadApp({ slug, version });
+      if (!app) {
+        return {
+          content: [asTextBlock({ error: `App not found: ${slug}` })],
+          isError: true,
+        };
+      }
+
+      return {
+        content: [asTextBlock(app)],
+        structuredContent: app,
+      };
+    },
+  );
+
+  server.registerTool(
     "save_page_version",
     {
       title: "Persist page version",
@@ -102,6 +161,72 @@ export function createMcpUiServer(options: {
         note,
         makeStable,
         definition,
+      });
+
+      return {
+        content: [asTextBlock(result)],
+        structuredContent: result,
+      };
+    },
+  );
+
+  server.registerTool(
+    "save_app_version",
+    {
+      title: "Persist app version",
+      description:
+        "Save an app schema as a new immutable version and refresh the stable app resource URI.",
+      inputSchema: {
+        slug: z.string().min(1),
+        name: z.string().min(1),
+        description: z.string().optional(),
+        author: z.string().optional(),
+        note: z.string().optional(),
+        makeStable: z.boolean().optional(),
+        schema: z.record(z.string(), z.unknown()),
+      },
+    },
+    async ({ slug, name, description, author, note, makeStable, schema }) => {
+      const result = await options.toolService.saveApp({
+        slug,
+        name,
+        description,
+        author,
+        note,
+        makeStable,
+        schema,
+      });
+
+      return {
+        content: [asTextBlock(result)],
+        structuredContent: result,
+      };
+    },
+  );
+
+  server.registerTool(
+    "create_app",
+    {
+      title: "Create app schema",
+      description:
+        "Create and persist an initial app schema from a name and an optional set of page slugs.",
+      inputSchema: {
+        name: z.string().min(1),
+        slug: z.string().optional(),
+        description: z.string().optional(),
+        pageSlugs: z.array(z.string()).optional(),
+        navigationStyle: z.string().optional(),
+        author: z.string().optional(),
+      },
+    },
+    async ({ name, slug, description, pageSlugs, navigationStyle, author }) => {
+      const result = await options.toolService.createApp({
+        name,
+        slug,
+        description,
+        pageSlugs,
+        navigationStyle,
+        author,
       });
 
       return {
@@ -333,6 +458,45 @@ export function createMcpUiServer(options: {
   );
 
   server.registerResource(
+    "stable-apps",
+    new ResourceTemplate("mcpui://apps/{slug}/stable", {
+      list: async () => {
+        const apps = await options.store.listApps();
+        return {
+          resources: apps.map(appResourceFromSummary),
+        };
+      },
+      complete: {
+        slug: async () => {
+          const apps = await options.store.listApps();
+          return apps.map((app) => app.slug);
+        },
+      },
+    }),
+    {
+      title: "Stable app resource",
+      description: "The current curated version of an app schema.",
+      mimeType: "application/vnd.mcp-ui-app+json",
+    },
+    async (_uri, variables) => {
+      const app = await options.store.getApp(String(variables.slug));
+      if (!app) {
+        throw new Error(`Stable app not found: ${String(variables.slug)}`);
+      }
+
+      return {
+        contents: [
+          {
+            uri: buildAppStableUri(app.slug),
+            mimeType: "application/vnd.mcp-ui-app+json",
+            text: JSON.stringify(app, null, 2),
+          },
+        ],
+      };
+    },
+  );
+
+  server.registerResource(
     "page-versions",
     new ResourceTemplate("mcpui://pages/{slug}/versions/{version}", {
       list: async () => {
@@ -386,6 +550,66 @@ export function createMcpUiServer(options: {
             uri: buildVersionUri(page.slug, page.version),
             mimeType: "application/vnd.mcp-ui+json",
             text: JSON.stringify(page, null, 2),
+          },
+        ],
+      };
+    },
+  );
+
+  server.registerResource(
+    "app-versions",
+    new ResourceTemplate("mcpui://apps/{slug}/versions/{version}", {
+      list: async () => {
+        const apps = await options.store.listApps();
+        const resources = [];
+        for (const app of apps) {
+          const versions = await options.store.listAppVersions(app.slug);
+          for (const version of versions) {
+            resources.push({
+              name: `${app.name} ${version.version}`,
+              title: `${app.name} ${version.version}`,
+              uri: buildAppVersionUri(app.slug, version.version),
+              mimeType: "application/vnd.mcp-ui-app+json",
+              description: version.note,
+            });
+          }
+        }
+
+        return {
+          resources,
+        };
+      },
+      complete: {
+        slug: async () => {
+          const apps = await options.store.listApps();
+          return apps.map((app) => app.slug);
+        },
+      },
+    }),
+    {
+      title: "Immutable app version resource",
+      description: "A historical immutable version of an app schema.",
+      mimeType: "application/vnd.mcp-ui-app+json",
+    },
+    async (_uri, variables) => {
+      const app = await options.store.getApp(
+        String(variables.slug),
+        String(variables.version),
+      );
+      if (!app) {
+        throw new Error(
+          `App version not found: ${String(variables.slug)}@${String(
+            variables.version,
+          )}`,
+        );
+      }
+
+      return {
+        contents: [
+          {
+            uri: buildAppVersionUri(app.slug, app.version),
+            mimeType: "application/vnd.mcp-ui-app+json",
+            text: JSON.stringify(app, null, 2),
           },
         ],
       };
