@@ -319,6 +319,28 @@ export function createMcpUiServer(options: {
   );
 
   server.registerTool(
+    "validate_app",
+    {
+      title: "Validate app schema",
+      description:
+        "Validate an app schema against the current multi-page application contract.",
+      inputSchema: {
+        schema: z.record(z.string(), z.unknown()),
+      },
+    },
+    async ({ schema }) => {
+      const result = await options.toolService.validateApp({
+        schema,
+      });
+
+      return {
+        content: [asTextBlock(result)],
+        structuredContent: result,
+      };
+    },
+  );
+
+  server.registerTool(
     "explain_page",
     {
       title: "Explain page DSL",

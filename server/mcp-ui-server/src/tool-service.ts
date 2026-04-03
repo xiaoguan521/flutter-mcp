@@ -20,6 +20,7 @@ import type {
   SeedPage,
   UpdatePageByInstructionInput,
   UpdatePageByInstructionResult,
+  ValidateAppResult,
   ValidatePageResult,
 } from "./types.js";
 import {
@@ -172,6 +173,10 @@ export class ToolService {
 
   async validatePage(input: { definition: JsonObject }): Promise<ValidatePageResult> {
     return validatePageDefinition(input.definition);
+  }
+
+  async validateApp(input: { schema: JsonObject }): Promise<ValidateAppResult> {
+    return validateAppSchema(input.schema);
   }
 
   async updatePageByInstruction(

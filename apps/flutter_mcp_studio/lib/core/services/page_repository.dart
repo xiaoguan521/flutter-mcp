@@ -41,6 +41,17 @@ class PageRepository {
         .toList();
   }
 
+  Future<List<AppSummaryModel>> listApps() async {
+    final response = await _client.get(_uri('/api/apps'));
+    final body = _decodeBody(response);
+    final result = body['result'] as List<dynamic>;
+    return result
+        .map((item) => AppSummaryModel.fromJson(
+              Map<String, dynamic>.from(item as Map),
+            ))
+        .toList();
+  }
+
   Future<List<PageTemplateModel>> listTemplates() async {
     final response = await _client.get(_uri('/api/templates'));
     final body = _decodeBody(response);
@@ -68,12 +79,39 @@ class PageRepository {
     );
   }
 
+  Future<AppDocumentModel> loadApp(
+    String slug, {
+    String? version,
+  }) async {
+    final response = await _client.get(
+      _uri(
+        '/api/apps/$slug',
+        version == null ? null : <String, String>{'version': version},
+      ),
+    );
+    final body = _decodeBody(response);
+    return AppDocumentModel.fromJson(
+      Map<String, dynamic>.from(body['result'] as Map),
+    );
+  }
+
   Future<List<PageVersionModel>> listVersions(String slug) async {
     final response = await _client.get(_uri('/api/pages/$slug/versions'));
     final body = _decodeBody(response);
     final result = body['result'] as List<dynamic>;
     return result
         .map((item) => PageVersionModel.fromJson(
+              Map<String, dynamic>.from(item as Map),
+            ))
+        .toList();
+  }
+
+  Future<List<AppVersionModel>> listAppVersions(String slug) async {
+    final response = await _client.get(_uri('/api/apps/$slug/versions'));
+    final body = _decodeBody(response);
+    final result = body['result'] as List<dynamic>;
+    return result
+        .map((item) => AppVersionModel.fromJson(
               Map<String, dynamic>.from(item as Map),
             ))
         .toList();
@@ -102,6 +140,61 @@ class PageRepository {
     );
     final body = _decodeBody(response);
     return SaveResultModel.fromJson(
+      Map<String, dynamic>.from(body['result'] as Map),
+    );
+  }
+
+  Future<SaveAppResultModel> saveApp({
+    required String slug,
+    required String name,
+    String? description,
+    String? note,
+    String? author,
+    bool makeStable = true,
+    required Map<String, dynamic> schema,
+  }) async {
+    final response = await _client.post(
+      _uri('/api/apps/$slug/save'),
+      headers: <String, String>{'content-type': 'application/json'},
+      body: jsonEncode(<String, dynamic>{
+        'name': name,
+        'description': description,
+        'note': note,
+        'author': author,
+        'makeStable': makeStable,
+        'schema': schema,
+      }),
+    );
+    final body = _decodeBody(response);
+    return SaveAppResultModel.fromJson(
+      Map<String, dynamic>.from(body['result'] as Map),
+    );
+  }
+
+  Future<CreateAppResultModel> createApp({
+    required String name,
+    String? slug,
+    String? description,
+    List<String>? pageSlugs,
+    String? navigationStyle,
+    String? author,
+  }) async {
+    final response = await _client.post(
+      _uri('/api/tools/create_app'),
+      headers: <String, String>{'content-type': 'application/json'},
+      body: jsonEncode(<String, dynamic>{
+        'name': name,
+        if (slug != null && slug.isNotEmpty) 'slug': slug,
+        if (description != null && description.isNotEmpty)
+          'description': description,
+        if (pageSlugs != null && pageSlugs.isNotEmpty) 'pageSlugs': pageSlugs,
+        if (navigationStyle != null && navigationStyle.isNotEmpty)
+          'navigationStyle': navigationStyle,
+        if (author != null && author.isNotEmpty) 'author': author,
+      }),
+    );
+    final body = _decodeBody(response);
+    return CreateAppResultModel.fromJson(
       Map<String, dynamic>.from(body['result'] as Map),
     );
   }
@@ -141,6 +234,22 @@ class PageRepository {
     );
     final body = _decodeBody(response);
     return PageValidationResultModel.fromJson(
+      Map<String, dynamic>.from(body['result'] as Map),
+    );
+  }
+
+  Future<AppValidationResultModel> validateApp(
+    Map<String, dynamic> schema,
+  ) async {
+    final response = await _client.post(
+      _uri('/api/tools/validate_app'),
+      headers: <String, String>{'content-type': 'application/json'},
+      body: jsonEncode(<String, dynamic>{
+        'schema': schema,
+      }),
+    );
+    final body = _decodeBody(response);
+    return AppValidationResultModel.fromJson(
       Map<String, dynamic>.from(body['result'] as Map),
     );
   }

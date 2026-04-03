@@ -62,6 +62,64 @@ void main() {
     expect(draftStore.hasDraft('ai-customer-list'), isFalse);
     expect(controller.validationResult?.valid, isTrue);
   });
+
+  test('StudioController can create and load an app shell from saved pages',
+      () async {
+    final repository = _FakePageRepository();
+    final draftStore = _FakeLocalDraftStore();
+    final mcpBridge = _FakeMcpBridgeService();
+    final controller = StudioController(
+      repository: repository,
+      draftStore: draftStore,
+      mcpBridgeService: mcpBridge,
+    );
+
+    await controller.generatePageFromPrompt(
+      prompt: '帮我生成一个销售看板',
+      pageType: 'dashboard',
+    );
+    await controller.persistCurrentPage();
+
+    await controller.createApp(
+      name: '销售运营后台',
+      description: '包含 dashboard 首页',
+      pageSlugs: const <String>['ai-customer-list'],
+      navigationStyle: 'tabs',
+    );
+
+    expect(controller.currentAppDocument, isNotNull);
+    expect(controller.currentAppDocument!.slug, 'sales-operations');
+    expect(controller.currentAppDocument!.schema['type'], 'app');
+    expect(
+        controller.currentAppDocument!.schema['homePage'], 'ai-customer-list');
+    expect((controller.currentAppDocument!.schema['routes'] as List).length, 1);
+    expect(controller.activeAppRoute, '/');
+    expect(controller.currentDocument?.slug, 'ai-customer-list');
+    expect(controller.apps, isNotEmpty);
+    expect(controller.appVersions, isNotEmpty);
+
+    await controller.loadApp('sales-operations');
+
+    expect(controller.selectedAppSlug, 'sales-operations');
+    expect(controller.selectedAppVersion, 'v1');
+    expect(controller.activeAppRoute, '/');
+    expect(controller.currentAppDocument!.schema['layoutShell'], isNotNull);
+
+    await controller.applyAppSource(
+      jsonEncode(<String, dynamic>{
+        ...controller.currentAppDocument!.schema,
+        'description': '已人工调整的应用骨架',
+      }),
+    );
+
+    expect(controller.appValidationResult?.valid, isTrue);
+    expect(controller.currentAppDocument!.schema['description'], '已人工调整的应用骨架');
+
+    final savedApp = await controller.persistCurrentApp();
+
+    expect(savedApp.app.version, 'v2');
+    expect(controller.selectedAppVersion, 'v2');
+  });
 }
 
 class _FakePageRepository extends PageRepository {
@@ -70,7 +128,11 @@ class _FakePageRepository extends PageRepository {
   final Map<String, PageDocumentModel> _pages = <String, PageDocumentModel>{};
   final Map<String, List<PageVersionModel>> _versions =
       <String, List<PageVersionModel>>{};
+  final Map<String, AppDocumentModel> _apps = <String, AppDocumentModel>{};
+  final Map<String, List<AppVersionModel>> _appVersions =
+      <String, List<AppVersionModel>>{};
   int _versionCounter = 0;
+  int _appVersionCounter = 0;
 
   @override
   Future<GeneratedPageResultModel> generatePageFromPrompt({
@@ -282,6 +344,196 @@ class _FakePageRepository extends PageRepository {
   @override
   Future<List<PageVersionModel>> listVersions(String slug) async {
     return _versions[slug] ?? <PageVersionModel>[];
+  }
+
+  @override
+  Future<CreateAppResultModel> createApp({
+    required String name,
+    String? slug,
+    String? description,
+    List<String>? pageSlugs,
+    String? navigationStyle,
+    String? author,
+  }) async {
+    _appVersionCounter += 1;
+    final resolvedSlug = slug ?? 'sales-operations';
+    final version = 'v$_appVersionCounter';
+    final pages = (pageSlugs ?? <String>[])
+        .map((pageSlug) => _pages[pageSlug])
+        .whereType<PageDocumentModel>()
+        .toList();
+    final schema = <String, dynamic>{
+      'type': 'app',
+      'appId': 'app-$resolvedSlug',
+      'slug': resolvedSlug,
+      'name': name,
+      'description': description,
+      'layoutShell': <String, dynamic>{
+        'type': navigationStyle == 'tabs' ? 'tabsShell' : 'sidebarShell',
+        'navigationStyle': navigationStyle ?? 'sidebar',
+      },
+      'pages': pages
+          .map(
+            (page) => <String, dynamic>{
+              'slug': page.slug,
+              'title': page.title,
+              'pageUri': page.stableUri,
+            },
+          )
+          .toList(),
+      'routes': pages
+          .asMap()
+          .entries
+          .map(
+            (entry) => <String, dynamic>{
+              'id': 'route-${entry.value.slug}',
+              'path': entry.key == 0 ? '/' : '/${entry.value.slug}',
+              'pageSlug': entry.value.slug,
+              'pageUri': entry.value.stableUri,
+              'title': entry.value.title,
+            },
+          )
+          .toList(),
+      'navigation': pages
+          .map(
+            (page) => <String, dynamic>{
+              'label': page.title,
+              'route': page.slug == pages.first.slug ? '/' : '/${page.slug}',
+              'pageSlug': page.slug,
+            },
+          )
+          .toList(),
+      'homePage': pages.isNotEmpty ? pages.first.slug : null,
+    };
+
+    final app = AppDocumentModel(
+      appId: 'app-$resolvedSlug',
+      slug: resolvedSlug,
+      name: name,
+      description: description,
+      version: version,
+      author: author ?? 'studio-user',
+      note: 'Created from app schema initializer',
+      stableUri: 'mcpui://apps/$resolvedSlug/stable',
+      versionUri: 'mcpui://apps/$resolvedSlug/versions/$version',
+      createdAt: '2026-04-03T20:00:00.000Z',
+      updatedAt: '2026-04-03T20:00:00.000Z',
+      isStable: true,
+      schema: _clone(schema),
+    );
+    _apps[resolvedSlug] = app;
+    _appVersions[resolvedSlug] = <AppVersionModel>[
+      AppVersionModel(
+        slug: resolvedSlug,
+        name: name,
+        version: version,
+        createdAt: '2026-04-03T20:00:00.000Z',
+        isStable: true,
+        author: author ?? 'studio-user',
+        stableUri: 'mcpui://apps/$resolvedSlug/stable',
+        versionUri: 'mcpui://apps/$resolvedSlug/versions/$version',
+        note: 'Created from app schema initializer',
+      ),
+    ];
+
+    return CreateAppResultModel(
+      app: app,
+      stableUri: app.stableUri!,
+      versionUri: app.versionUri!,
+      warnings: const <String>[],
+    );
+  }
+
+  @override
+  Future<List<AppSummaryModel>> listApps() async {
+    return _apps.values
+        .map(
+          (app) => AppSummaryModel(
+            slug: app.slug,
+            name: app.name,
+            description: app.description,
+            stableVersion: app.version ?? 'v0',
+            updatedAt: app.updatedAt ?? '',
+            stableUri: app.stableUri ?? '',
+            versionUri: app.versionUri ?? '',
+            homePage: app.schema['homePage'] as String?,
+          ),
+        )
+        .toList();
+  }
+
+  @override
+  Future<AppDocumentModel> loadApp(
+    String slug, {
+    String? version,
+  }) async {
+    return _apps[slug]!;
+  }
+
+  @override
+  Future<List<AppVersionModel>> listAppVersions(String slug) async {
+    return _appVersions[slug] ?? <AppVersionModel>[];
+  }
+
+  @override
+  Future<AppValidationResultModel> validateApp(
+      Map<String, dynamic> schema) async {
+    return AppValidationResultModel(
+      valid: true,
+      errors: const <ValidationIssueModel>[],
+      warnings: const <ValidationIssueModel>[],
+      normalizedSchema: _clone(schema),
+    );
+  }
+
+  @override
+  Future<SaveAppResultModel> saveApp({
+    required String slug,
+    required String name,
+    String? description,
+    String? note,
+    String? author,
+    bool makeStable = true,
+    required Map<String, dynamic> schema,
+  }) async {
+    _appVersionCounter += 1;
+    final version = 'v$_appVersionCounter';
+    final app = AppDocumentModel(
+      appId: 'app-$slug',
+      slug: slug,
+      name: name,
+      description: description,
+      version: version,
+      author: author ?? 'studio-user',
+      note: note,
+      stableUri: 'mcpui://apps/$slug/stable',
+      versionUri: 'mcpui://apps/$slug/versions/$version',
+      createdAt: '2026-04-03T20:00:00.000Z',
+      updatedAt: '2026-04-03T20:00:00.000Z',
+      isStable: makeStable,
+      schema: _clone(schema),
+    );
+    _apps[slug] = app;
+    _appVersions[slug] = <AppVersionModel>[
+      AppVersionModel(
+        slug: slug,
+        name: name,
+        version: version,
+        createdAt: '2026-04-03T20:00:00.000Z',
+        isStable: makeStable,
+        author: author ?? 'studio-user',
+        stableUri: 'mcpui://apps/$slug/stable',
+        versionUri: 'mcpui://apps/$slug/versions/$version',
+        note: note,
+      ),
+      ...(_appVersions[slug] ?? <AppVersionModel>[]),
+    ];
+
+    return SaveAppResultModel(
+      app: app,
+      stableUri: app.stableUri!,
+      versionUri: app.versionUri!,
+    );
   }
 
   Map<String, dynamic> _buildBaseDefinition({required String title}) {

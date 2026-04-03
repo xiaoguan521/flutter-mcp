@@ -74,6 +74,79 @@ class PageVersionModel {
   }
 }
 
+class AppSummaryModel {
+  AppSummaryModel({
+    required this.slug,
+    required this.name,
+    required this.stableVersion,
+    required this.updatedAt,
+    required this.stableUri,
+    required this.versionUri,
+    this.description,
+    this.homePage,
+  });
+
+  final String slug;
+  final String name;
+  final String stableVersion;
+  final String updatedAt;
+  final String stableUri;
+  final String versionUri;
+  final String? description;
+  final String? homePage;
+
+  factory AppSummaryModel.fromJson(Map<String, dynamic> json) {
+    return AppSummaryModel(
+      slug: json['slug'] as String,
+      name: json['name'] as String,
+      stableVersion: json['stableVersion'] as String? ?? 'v1',
+      updatedAt: json['updatedAt'] as String? ?? '',
+      stableUri: json['stableUri'] as String? ?? '',
+      versionUri: json['versionUri'] as String? ?? '',
+      description: json['description'] as String?,
+      homePage: json['homePage'] as String?,
+    );
+  }
+}
+
+class AppVersionModel {
+  AppVersionModel({
+    required this.slug,
+    required this.name,
+    required this.version,
+    required this.createdAt,
+    required this.isStable,
+    required this.author,
+    required this.stableUri,
+    required this.versionUri,
+    this.note,
+  });
+
+  final String slug;
+  final String name;
+  final String version;
+  final String createdAt;
+  final bool isStable;
+  final String author;
+  final String stableUri;
+  final String versionUri;
+  final String? note;
+
+  factory AppVersionModel.fromJson(Map<String, dynamic> json) {
+    return AppVersionModel(
+      slug: json['slug'] as String,
+      name: json['name'] as String,
+      version: json['version'] as String,
+      createdAt: json['createdAt'] as String,
+      isStable: json['isStable'] as bool? ?? false,
+      author: json['author'] as String? ?? 'unknown',
+      stableUri: json['stableUri'] as String? ?? '',
+      versionUri: json['versionUri'] as String? ?? '',
+      note: json['note'] as String?,
+    );
+  }
+}
+
 class PageDocumentModel {
   PageDocumentModel({
     required this.slug,
@@ -161,6 +234,90 @@ class PageDocumentModel {
   }
 }
 
+class AppDocumentModel {
+  AppDocumentModel({
+    required this.appId,
+    required this.slug,
+    required this.name,
+    required this.schema,
+    this.description,
+    this.version,
+    this.author,
+    this.note,
+    this.stableUri,
+    this.versionUri,
+    this.createdAt,
+    this.updatedAt,
+    this.isStable = false,
+  });
+
+  final String appId;
+  final String slug;
+  final String name;
+  final String? description;
+  final String? version;
+  final String? author;
+  final String? note;
+  final String? stableUri;
+  final String? versionUri;
+  final String? createdAt;
+  final String? updatedAt;
+  final bool isStable;
+  final Map<String, dynamic> schema;
+
+  factory AppDocumentModel.fromJson(Map<String, dynamic> json) {
+    return AppDocumentModel(
+      appId: json['appId'] as String? ?? '',
+      slug: json['slug'] as String,
+      name: json['name'] as String,
+      description: json['description'] as String?,
+      version: json['version'] as String?,
+      author: json['author'] as String?,
+      note: json['note'] as String?,
+      stableUri: json['stableUri'] as String?,
+      versionUri: json['versionUri'] as String?,
+      createdAt: json['createdAt'] as String?,
+      updatedAt: json['updatedAt'] as String?,
+      isStable: json['isStable'] as bool? ?? false,
+      schema: Map<String, dynamic>.from(
+        json['schema'] as Map<String, dynamic>? ?? <String, dynamic>{},
+      ),
+    );
+  }
+
+  AppDocumentModel copyWith({
+    String? appId,
+    String? slug,
+    String? name,
+    String? description,
+    String? version,
+    String? author,
+    String? note,
+    String? stableUri,
+    String? versionUri,
+    String? createdAt,
+    String? updatedAt,
+    bool? isStable,
+    Map<String, dynamic>? schema,
+  }) {
+    return AppDocumentModel(
+      appId: appId ?? this.appId,
+      slug: slug ?? this.slug,
+      name: name ?? this.name,
+      description: description ?? this.description,
+      version: version ?? this.version,
+      author: author ?? this.author,
+      note: note ?? this.note,
+      stableUri: stableUri ?? this.stableUri,
+      versionUri: versionUri ?? this.versionUri,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      isStable: isStable ?? this.isStable,
+      schema: schema ?? this.schema,
+    );
+  }
+}
+
 class SaveResultModel {
   SaveResultModel({
     required this.page,
@@ -179,6 +336,55 @@ class SaveResultModel {
       ),
       stableUri: json['stableUri'] as String,
       versionUri: json['versionUri'] as String,
+    );
+  }
+}
+
+class SaveAppResultModel {
+  SaveAppResultModel({
+    required this.app,
+    required this.stableUri,
+    required this.versionUri,
+  });
+
+  final AppDocumentModel app;
+  final String stableUri;
+  final String versionUri;
+
+  factory SaveAppResultModel.fromJson(Map<String, dynamic> json) {
+    return SaveAppResultModel(
+      app: AppDocumentModel.fromJson(
+        Map<String, dynamic>.from(json['app'] as Map<String, dynamic>),
+      ),
+      stableUri: json['stableUri'] as String,
+      versionUri: json['versionUri'] as String,
+    );
+  }
+}
+
+class CreateAppResultModel {
+  CreateAppResultModel({
+    required this.app,
+    required this.stableUri,
+    required this.versionUri,
+    required this.warnings,
+  });
+
+  final AppDocumentModel app;
+  final String stableUri;
+  final String versionUri;
+  final List<String> warnings;
+
+  factory CreateAppResultModel.fromJson(Map<String, dynamic> json) {
+    return CreateAppResultModel(
+      app: AppDocumentModel.fromJson(
+        Map<String, dynamic>.from(json['app'] as Map<String, dynamic>),
+      ),
+      stableUri: json['stableUri'] as String,
+      versionUri: json['versionUri'] as String,
+      warnings: (json['warnings'] as List<dynamic>? ?? <dynamic>[])
+          .map((item) => item.toString())
+          .toList(),
     );
   }
 }
@@ -262,6 +468,44 @@ class PageValidationResultModel {
       usedComponents: (json['usedComponents'] as List<dynamic>? ?? <dynamic>[])
           .map((item) => item.toString())
           .toList(),
+    );
+  }
+}
+
+class AppValidationResultModel {
+  AppValidationResultModel({
+    required this.valid,
+    required this.errors,
+    required this.warnings,
+    required this.normalizedSchema,
+  });
+
+  final bool valid;
+  final List<ValidationIssueModel> errors;
+  final List<ValidationIssueModel> warnings;
+  final Map<String, dynamic> normalizedSchema;
+
+  factory AppValidationResultModel.fromJson(Map<String, dynamic> json) {
+    return AppValidationResultModel(
+      valid: json['valid'] as bool? ?? false,
+      errors: (json['errors'] as List<dynamic>? ?? <dynamic>[])
+          .map(
+            (item) => ValidationIssueModel.fromJson(
+              Map<String, dynamic>.from(item as Map),
+            ),
+          )
+          .toList(),
+      warnings: (json['warnings'] as List<dynamic>? ?? <dynamic>[])
+          .map(
+            (item) => ValidationIssueModel.fromJson(
+              Map<String, dynamic>.from(item as Map),
+            ),
+          )
+          .toList(),
+      normalizedSchema: Map<String, dynamic>.from(
+        json['normalizedSchema'] as Map<String, dynamic>? ??
+            <String, dynamic>{},
+      ),
     );
   }
 }

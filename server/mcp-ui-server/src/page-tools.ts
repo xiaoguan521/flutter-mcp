@@ -602,7 +602,7 @@ function summarizeNode(node: JsonObject, depth: number, lines: string[]): void {
     node.subtitle,
   ].filter((value): value is string => typeof value === "string" && value.trim().length > 0);
   const indent = "  ".repeat(depth);
-  const suffix = labelCandidates.isNotEmpty ? ` (${labelCandidates[0]})` : "";
+  const suffix = labelCandidates.length > 0 ? ` (${labelCandidates[0]})` : "";
   lines.push(`${indent}- ${type}${suffix}`);
 
   if (Array.isArray(node.children)) {
@@ -702,7 +702,7 @@ function collectBindingSummary(definition: JsonObject): string[] {
 export function explainPageDefinition(definition: JsonObject): ExplainPageResult {
   const validation = validatePageDefinition(definition);
   const normalizedDefinition = validation.normalizedDefinition;
-  const structure = <string>[];
+  const structure: string[] = [];
   if (isObject(normalizedDefinition.content)) {
     summarizeNode(normalizedDefinition.content, 0, structure);
   }

@@ -23,6 +23,8 @@ class StudioController extends ChangeNotifier {
 
   bool isBusy = false;
   bool isSaving = false;
+  bool isLoadingApps = false;
+  bool isCreatingApp = false;
   bool isGenerating = false;
   bool isExplaining = false;
   bool isApplyingInstruction = false;
@@ -33,26 +35,41 @@ class StudioController extends ChangeNotifier {
   String statusMessage = '等待加载页面';
   String? selectedSlug;
   String? selectedVersion;
+  String? selectedAppSlug;
+  String? selectedAppVersion;
+  String? activeAppRoute;
   String? draftUpdatedAt;
   int sourceRevision = 0;
+  int appSourceRevision = 0;
 
   List<PageSummaryModel> pages = <PageSummaryModel>[];
   List<PageVersionModel> versions = <PageVersionModel>[];
+  List<AppSummaryModel> apps = <AppSummaryModel>[];
+  List<AppVersionModel> appVersions = <AppVersionModel>[];
   List<PageTemplateModel> templates = <PageTemplateModel>[];
   List<ComponentCatalogItemModel> componentCatalog =
       <ComponentCatalogItemModel>[];
   PageDocumentModel? currentDocument;
+  AppDocumentModel? currentAppDocument;
   GeneratedPageResultModel? lastGeneration;
   PageExplanationResultModel? lastExplanation;
   PageUpdateResultModel? lastInstructionUpdate;
   PageValidationResultModel? validationResult;
+  AppValidationResultModel? appValidationResult;
+  List<String> lastAppWarnings = <String>[];
 
   String get prettySource => const JsonEncoder.withIndent('  ')
       .convert(currentDocument?.definition ?? <String, dynamic>{});
 
+  String get prettyAppSource => const JsonEncoder.withIndent('  ')
+      .convert(currentAppDocument?.schema ?? <String, dynamic>{});
+
   int get runtimeRevision => sourceRevision;
 
   bool get canUseAiTools => !isUsingBundledFallback;
+
+  List<Map<String, dynamic>> get currentAppRoutes => _extractRoutesFromSchema(
+      currentAppDocument?.schema ?? <String, dynamic>{});
 
   List<Map<String, dynamic>> get contentBlocks {
     final definition = currentDocument?.definition;
@@ -75,6 +92,7 @@ class StudioController extends ChangeNotifier {
 
   Future<void> bootstrap() async {
     await refreshPages(selectFirst: true);
+    await refreshApps();
     await _loadAiMetadata();
     if (currentDocument != null && canUseAiTools) {
       await validateCurrentPage(showStatus: false, replaceWithNormalized: true);
@@ -93,6 +111,11 @@ class StudioController extends ChangeNotifier {
         ? 'MCP Streamable HTTP 已连接'
         : 'MCP 连接失败，仍可通过 HTTP API 工作';
     notifyListeners();
+  }
+
+  Future<void> refreshWorkspace() async {
+    await refreshPages(selectFirst: currentDocument == null);
+    await refreshApps(selectFirst: currentAppDocument == null);
   }
 
   Future<void> refreshPages({bool selectFirst = false}) async {
@@ -120,9 +143,54 @@ class StudioController extends ChangeNotifier {
     }
   }
 
+  Future<void> refreshApps({bool selectFirst = false}) async {
+    if (isUsingBundledFallback) {
+      apps = <AppSummaryModel>[];
+      appVersions = <AppVersionModel>[];
+      currentAppDocument = null;
+      selectedAppSlug = null;
+      selectedAppVersion = null;
+      activeAppRoute = null;
+      appValidationResult = null;
+      lastAppWarnings = <String>[];
+      notifyListeners();
+      return;
+    }
+
+    isLoadingApps = true;
+    notifyListeners();
+
+    try {
+      apps = await repository.listApps();
+      if (selectedAppSlug != null &&
+          apps.any((app) => app.slug == selectedAppSlug)) {
+        appVersions = await repository.listAppVersions(selectedAppSlug!);
+      } else {
+        appVersions = <AppVersionModel>[];
+      }
+    } catch (loadError) {
+      apps = <AppSummaryModel>[];
+      appVersions = <AppVersionModel>[];
+      currentAppDocument = null;
+      selectedAppSlug = null;
+      selectedAppVersion = null;
+      activeAppRoute = null;
+      appValidationResult = null;
+      error ??= loadError.toString();
+    } finally {
+      isLoadingApps = false;
+      notifyListeners();
+    }
+
+    if (selectFirst && apps.isNotEmpty) {
+      await loadApp(apps.first.slug);
+    }
+  }
+
   Future<void> loadPage(
     String slug, {
     String? version,
+    bool preserveAppContext = false,
   }) async {
     isBusy = true;
     error = null;
@@ -155,6 +223,15 @@ class StudioController extends ChangeNotifier {
       selectedVersion = version ?? document.version;
       currentDocument =
           document.copyWith(definition: _cloneMap(document.definition));
+      if (!preserveAppContext) {
+        currentAppDocument = null;
+        selectedAppSlug = null;
+        selectedAppVersion = null;
+        activeAppRoute = null;
+        appValidationResult = null;
+        appVersions = <AppVersionModel>[];
+        lastAppWarnings = <String>[];
+      }
       lastGeneration = null;
       lastExplanation = null;
       lastInstructionUpdate = null;
@@ -386,6 +463,230 @@ class StudioController extends ChangeNotifier {
     }
   }
 
+  Future<void> loadApp(
+    String slug, {
+    String? version,
+  }) async {
+    if (isUsingBundledFallback) {
+      error = '当前服务端不可用，暂时无法加载应用骨架';
+      statusMessage = '应用加载不可用';
+      notifyListeners();
+      return;
+    }
+
+    isLoadingApps = true;
+    error = null;
+    notifyListeners();
+
+    try {
+      final document = await repository.loadApp(slug, version: version);
+      currentAppDocument = _syncAppDocumentFromSchema(
+        document.copyWith(schema: _cloneMap(document.schema)),
+      );
+      selectedAppSlug = slug;
+      selectedAppVersion = version ?? document.version;
+      _bumpAppSource();
+      lastAppWarnings = <String>[];
+      appVersions = await repository.listAppVersions(slug);
+      await _loadInitialAppRoute(document);
+      await validateCurrentApp(showStatus: false, replaceWithNormalized: true);
+      statusMessage = '已加载应用骨架：${document.name}';
+    } catch (loadError) {
+      error = loadError.toString();
+      statusMessage = '应用加载失败';
+    } finally {
+      isLoadingApps = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> createApp({
+    required String name,
+    String? description,
+    List<String>? pageSlugs,
+    String? navigationStyle,
+  }) async {
+    final trimmedName = name.trim();
+    if (trimmedName.isEmpty) {
+      error = '请输入应用名称';
+      statusMessage = '应用创建失败';
+      notifyListeners();
+      return;
+    }
+
+    if (isUsingBundledFallback) {
+      error = '当前服务端不可用，暂时无法创建应用骨架';
+      statusMessage = '应用创建不可用';
+      notifyListeners();
+      return;
+    }
+
+    isCreatingApp = true;
+    error = null;
+    notifyListeners();
+
+    try {
+      final result = await repository.createApp(
+        name: trimmedName,
+        description: description?.trim(),
+        pageSlugs: pageSlugs,
+        navigationStyle: navigationStyle,
+        author: 'studio-user',
+      );
+      lastAppWarnings = result.warnings;
+      currentAppDocument = _syncAppDocumentFromSchema(
+        result.app.copyWith(schema: _cloneMap(result.app.schema)),
+      );
+      selectedAppSlug = result.app.slug;
+      selectedAppVersion = result.app.version;
+      _bumpAppSource();
+      statusMessage = '应用骨架已创建：${result.app.versionUri ?? result.versionUri}';
+      await refreshApps();
+      await loadApp(result.app.slug, version: result.app.version);
+    } catch (createError) {
+      error = createError.toString();
+      statusMessage = '应用创建失败';
+    } finally {
+      isCreatingApp = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> openAppRoute(String routePath) async {
+    final route = currentAppRoutes.cast<Map<String, dynamic>?>().firstWhere(
+          (item) => item?['path']?.toString() == routePath,
+          orElse: () => null,
+        );
+    if (route == null) {
+      error = '未找到应用路由：$routePath';
+      statusMessage = '应用路由切换失败';
+      notifyListeners();
+      return;
+    }
+
+    final pageSlug = route['pageSlug']?.toString();
+    if (pageSlug == null || pageSlug.isEmpty) {
+      error = '应用路由未绑定页面：$routePath';
+      statusMessage = '应用路由切换失败';
+      notifyListeners();
+      return;
+    }
+
+    activeAppRoute = routePath;
+    await loadPage(pageSlug, preserveAppContext: true);
+    statusMessage = '已切换应用路由：$routePath';
+    notifyListeners();
+  }
+
+  Future<void> applyAppSource(String source) async {
+    try {
+      final parsed = jsonDecode(source) as Map<String, dynamic>;
+      final document = currentAppDocument;
+      if (document == null) {
+        return;
+      }
+      currentAppDocument = _syncAppDocumentFromSchema(
+        document.copyWith(schema: _cloneMap(parsed)),
+      );
+      error = null;
+      _bumpAppSource();
+      await validateCurrentApp(showStatus: true, replaceWithNormalized: true);
+      notifyListeners();
+    } catch (parseError) {
+      error = '应用 Schema 解析失败：$parseError';
+      statusMessage = '应用 Schema 解析失败';
+      notifyListeners();
+    }
+  }
+
+  Future<void> validateCurrentApp({
+    bool showStatus = true,
+    bool replaceWithNormalized = false,
+  }) async {
+    final document = currentAppDocument;
+    if (document == null || !canUseAiTools) {
+      appValidationResult = null;
+      return;
+    }
+
+    try {
+      final result = await repository.validateApp(document.schema);
+      appValidationResult = result;
+
+      if (replaceWithNormalized && result.valid) {
+        currentAppDocument = _syncAppDocumentFromSchema(
+          document.copyWith(
+            schema: _cloneMap(result.normalizedSchema),
+          ),
+        );
+        _bumpAppSource();
+      }
+
+      if (showStatus) {
+        if (result.valid && result.warnings.isEmpty) {
+          statusMessage = '应用 Schema 校验通过';
+        } else if (result.valid) {
+          statusMessage = '应用 Schema 可用，但有 ${result.warnings.length} 条提示';
+        } else {
+          statusMessage = '应用 Schema 校验失败：${result.errors.length} 个错误';
+        }
+      }
+    } catch (validationError) {
+      appValidationResult = null;
+      error = validationError.toString();
+      if (showStatus) {
+        statusMessage = '应用 Schema 校验失败';
+      }
+    } finally {
+      notifyListeners();
+    }
+  }
+
+  Future<SaveAppResultModel> persistCurrentApp({
+    String? note,
+  }) async {
+    final document = currentAppDocument;
+    if (document == null) {
+      throw Exception('当前没有可固化的应用');
+    }
+
+    isSaving = true;
+    error = null;
+    notifyListeners();
+
+    try {
+      final saveResult = await repository.saveApp(
+        slug: _schemaString(document.schema, 'slug') ?? document.slug,
+        name: _schemaString(document.schema, 'name') ?? document.name,
+        description: _schemaString(document.schema, 'description') ??
+            document.description,
+        note: note ?? 'Saved from studio',
+        author: 'studio-user',
+        schema: _cloneMap(document.schema),
+      );
+
+      currentAppDocument = _syncAppDocumentFromSchema(
+        saveResult.app.copyWith(
+          schema: _cloneMap(saveResult.app.schema),
+        ),
+      );
+      selectedAppSlug = saveResult.app.slug;
+      selectedAppVersion = saveResult.app.version;
+      _bumpAppSource();
+      statusMessage = '应用固化完成：${saveResult.versionUri}';
+      await refreshApps();
+      await loadApp(saveResult.app.slug, version: saveResult.app.version);
+      return saveResult;
+    } catch (saveError) {
+      error = saveError.toString();
+      statusMessage = '应用固化失败';
+      rethrow;
+    } finally {
+      isSaving = false;
+      notifyListeners();
+    }
+  }
+
   Future<void> explainCurrentPage() async {
     final document = currentDocument;
     if (document == null) {
@@ -512,7 +813,11 @@ class StudioController extends ChangeNotifier {
       await draftStore.deleteDraft(saveResult.page.slug);
       draftUpdatedAt = null;
       await refreshPages();
-      await loadPage(saveResult.page.slug, version: saveResult.page.version);
+      await loadPage(
+        saveResult.page.slug,
+        version: saveResult.page.version,
+        preserveAppContext: currentAppDocument != null,
+      );
       return saveResult;
     } catch (saveError) {
       error = saveError.toString();
@@ -570,6 +875,73 @@ class StudioController extends ChangeNotifier {
 
   void _bumpSource() {
     sourceRevision += 1;
+  }
+
+  void _bumpAppSource() {
+    appSourceRevision += 1;
+  }
+
+  AppDocumentModel _syncAppDocumentFromSchema(AppDocumentModel document) {
+    return document.copyWith(
+      appId: _schemaString(document.schema, 'appId') ?? document.appId,
+      slug: _schemaString(document.schema, 'slug') ?? document.slug,
+      name: _schemaString(document.schema, 'name') ?? document.name,
+      description:
+          _schemaString(document.schema, 'description') ?? document.description,
+    );
+  }
+
+  String? _schemaString(Map<String, dynamic> schema, String key) {
+    final value = schema[key];
+    if (value is String && value.trim().isNotEmpty) {
+      return value.trim();
+    }
+    return null;
+  }
+
+  Future<void> _loadInitialAppRoute(AppDocumentModel document) async {
+    final routes = _extractRoutesFromSchema(document.schema);
+    if (routes.isEmpty) {
+      activeAppRoute = null;
+      return;
+    }
+
+    final homePage = document.schema['homePage']?.toString();
+    Map<String, dynamic>? targetRoute;
+    if (homePage != null && homePage.isNotEmpty) {
+      for (final route in routes) {
+        if (route['pageSlug']?.toString() == homePage) {
+          targetRoute = route;
+          break;
+        }
+      }
+    }
+    targetRoute ??= routes.first;
+
+    final targetPath = targetRoute['path']?.toString();
+    final targetPageSlug = targetRoute['pageSlug']?.toString();
+    if (targetPath == null ||
+        targetPath.isEmpty ||
+        targetPageSlug == null ||
+        targetPageSlug.isEmpty) {
+      activeAppRoute = null;
+      return;
+    }
+
+    activeAppRoute = targetPath;
+    await loadPage(targetPageSlug, preserveAppContext: true);
+  }
+
+  List<Map<String, dynamic>> _extractRoutesFromSchema(
+      Map<String, dynamic> schema) {
+    final routes = schema['routes'];
+    if (routes is! List) {
+      return const <Map<String, dynamic>>[];
+    }
+    return routes
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
   }
 
   List<dynamic> _editableChildren() {

@@ -400,6 +400,20 @@ export function createHttpServer(options: {
             result,
           });
         }
+        case "validate_app": {
+          if (!payload.schema || typeof payload.schema !== "object") {
+            return jsonError(res, 400, "validate_app requires schema.");
+          }
+
+          const result = await options.toolService.validateApp({
+            schema: payload.schema as Record<string, unknown>,
+          });
+
+          return res.json({
+            success: true,
+            result,
+          });
+        }
         case "explain_page": {
           if (!payload.definition || typeof payload.definition !== "object") {
             return jsonError(res, 400, "explain_page requires definition.");

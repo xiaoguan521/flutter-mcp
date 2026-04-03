@@ -209,8 +209,9 @@ export function validateAppSchema(schema: JsonObject): ValidateAppResult {
       pushIssue(errors, `pages[${index}].slug`, "Page entry slug is required.");
       return;
     }
-    page.slug = normalizeSlug(page.slug);
-    pageSlugs.add(page.slug);
+    const normalizedPageSlug = normalizeSlug(page.slug);
+    page.slug = normalizedPageSlug;
+    pageSlugs.add(normalizedPageSlug);
 
     if (typeof page.pageUri !== "string" || page.pageUri.trim().length === 0) {
       pushIssue(
@@ -241,12 +242,13 @@ export function validateAppSchema(schema: JsonObject): ValidateAppResult {
       pushIssue(errors, `routes[${index}].pageSlug`, "Route pageSlug is required.");
       return;
     }
-    route.pageSlug = normalizeSlug(route.pageSlug);
-    if (!pageSlugs.has(route.pageSlug)) {
+    const normalizedRoutePageSlug = normalizeSlug(route.pageSlug);
+    route.pageSlug = normalizedRoutePageSlug;
+    if (!pageSlugs.has(normalizedRoutePageSlug)) {
       pushIssue(
         warnings,
         `routes[${index}].pageSlug`,
-        `Route references missing page "${route.pageSlug}".`,
+        `Route references missing page "${normalizedRoutePageSlug}".`,
         "Add the page to the pages list or update the route reference.",
       );
     }

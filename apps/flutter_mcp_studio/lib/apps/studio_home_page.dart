@@ -15,16 +15,26 @@ class StudioHomePage extends StatefulWidget {
 
 class _StudioHomePageState extends State<StudioHomePage> {
   final TextEditingController _sourceController = TextEditingController();
+  final TextEditingController _appSourceController = TextEditingController();
   final TextEditingController _promptController = TextEditingController();
   final TextEditingController _instructionController = TextEditingController();
+  final TextEditingController _appNameController = TextEditingController();
+  final TextEditingController _appDescriptionController =
+      TextEditingController();
   String _selectedPageType = 'dashboard';
+  String _selectedNavigationStyle = 'sidebar';
   int _lastSourceRevision = -1;
+  int _lastAppSourceRevision = -1;
+  final Set<String> _selectedAppPageSlugs = <String>{};
 
   @override
   void dispose() {
     _sourceController.dispose();
+    _appSourceController.dispose();
     _promptController.dispose();
     _instructionController.dispose();
+    _appNameController.dispose();
+    _appDescriptionController.dispose();
     super.dispose();
   }
 
@@ -38,6 +48,15 @@ class _StudioHomePageState extends State<StudioHomePage> {
             text: controller.prettySource,
             selection: TextSelection.collapsed(
               offset: controller.prettySource.length,
+            ),
+          );
+        }
+        if (_lastAppSourceRevision != controller.appSourceRevision) {
+          _lastAppSourceRevision = controller.appSourceRevision;
+          _appSourceController.value = TextEditingValue(
+            text: controller.prettyAppSource,
+            selection: TextSelection.collapsed(
+              offset: controller.prettyAppSource.length,
             ),
           );
         }
@@ -205,7 +224,7 @@ class _StudioHomePageState extends State<StudioHomePage> {
           Row(
             children: <Widget>[
               const Text(
-                '页面版本',
+                '页面与应用',
                 style: TextStyle(
                   fontWeight: FontWeight.w800,
                   fontSize: 18,
@@ -214,7 +233,7 @@ class _StudioHomePageState extends State<StudioHomePage> {
               ),
               const Spacer(),
               IconButton(
-                onPressed: () => controller.refreshPages(),
+                onPressed: () => controller.refreshWorkspace(),
                 icon: const Icon(Icons.refresh_rounded),
               ),
             ],
@@ -264,6 +283,77 @@ class _StudioHomePageState extends State<StudioHomePage> {
                 ),
                 const SizedBox(height: 16),
                 const Text(
+                  '应用列表',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF334155),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                if (controller.apps.isEmpty)
+                  Card(
+                    elevation: 0,
+                    color: const Color(0xFFF8FAFC),
+                    child: ListTile(
+                      dense: true,
+                      title: Text(
+                        controller.isUsingBundledFallback
+                            ? '服务端离线时不可加载应用'
+                            : '还没有已保存的应用',
+                      ),
+                      subtitle: const Text('可在右侧创建一个应用骨架'),
+                    ),
+                  ),
+                ...controller.apps.map(
+                  (app) => Card(
+                    elevation: 0,
+                    color: controller.selectedAppSlug == app.slug
+                        ? const Color(0xFFFEF3C7)
+                        : const Color(0xFFF8FAFC),
+                    child: ListTile(
+                      title: Text(app.name),
+                      subtitle: Text(app.description ?? app.slug),
+                      trailing:
+                          const Icon(Icons.account_tree_outlined, size: 18),
+                      onTap: controller.isUsingBundledFallback
+                          ? null
+                          : () => controller.loadApp(app.slug),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  '应用版本',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF334155),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ...controller.appVersions.map(
+                  (version) => Card(
+                    elevation: 0,
+                    color: version.version == controller.selectedAppVersion
+                        ? const Color(0xFFFFF7ED)
+                        : const Color(0xFFF8FAFC),
+                    child: ListTile(
+                      dense: true,
+                      title: Text(version.version),
+                      subtitle: Text(version.note ?? version.createdAt),
+                      trailing: version.isStable
+                          ? const Icon(Icons.push_pin_outlined, size: 18)
+                          : const Icon(Icons.history_rounded, size: 18),
+                      onTap: controller.isUsingBundledFallback
+                          ? null
+                          : () => controller.loadApp(
+                                version.slug,
+                                version: version.version,
+                              ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
                   '版本记录',
                   style: TextStyle(
                     fontWeight: FontWeight.w700,
@@ -303,6 +393,8 @@ class _StudioHomePageState extends State<StudioHomePage> {
 
   Widget _buildPreviewPanel(StudioController controller) {
     final document = controller.currentDocument;
+    final appDocument = controller.currentAppDocument;
+    final appRoutes = controller.currentAppRoutes;
     final generation = controller.lastGeneration;
     final explanation = controller.lastExplanation;
     final update = controller.lastInstructionUpdate;
@@ -321,12 +413,22 @@ class _StudioHomePageState extends State<StudioHomePage> {
           ),
           const SizedBox(height: 6),
           Text(
-            document?.description ?? '从左侧选择一个样例页面开始编辑。',
+            appDocument != null
+                ? (appDocument.description ?? '当前正在预览应用骨架与页面路由。')
+                : (document?.description ?? '从左侧选择一个样例页面开始编辑。'),
             style: const TextStyle(
               color: Color(0xFF64748B),
               height: 1.4,
             ),
           ),
+          if (appDocument != null)
+            _buildAppSummary(
+              appDocument,
+              controller.lastAppWarnings,
+              controller.activeAppRoute,
+              appRoutes,
+              controller,
+            ),
           if (document?.versionUri != null && document!.versionUri!.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 10),
@@ -351,19 +453,442 @@ class _StudioHomePageState extends State<StudioHomePage> {
                 borderRadius: BorderRadius.circular(22),
                 border: Border.all(color: const Color(0xFFE2E8F0)),
               ),
-              child: document == null
-                  ? const Center(
-                      child: Text('暂无页面'),
-                    )
-                  : RuntimeCanvas(
-                      definition: document.definition,
-                      revision: controller.runtimeRevision,
-                      onToolCall: controller.invokeRuntimeTool,
-                    ),
+              child: _buildPreviewSurface(
+                controller,
+                document,
+                appDocument,
+                appRoutes,
+              ),
             ),
           ),
           // -- 校验结果展示 --
           if (validation != null) _buildValidationPanel(validation),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAppSummary(
+    AppDocumentModel app,
+    List<String> warnings,
+    String? activeRoute,
+    List<Map<String, dynamic>> routes,
+    StudioController controller,
+  ) {
+    final navigation =
+        (app.schema['navigation'] as List<dynamic>? ?? <dynamic>[])
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList();
+    final layoutShellRaw = app.schema['layoutShell'];
+    final layoutShell = layoutShellRaw is Map<String, dynamic>
+        ? layoutShellRaw
+        : layoutShellRaw is Map
+            ? Map<String, dynamic>.from(layoutShellRaw)
+            : null;
+    final navigationStyle = layoutShell?['navigationStyle']?.toString() ?? '-';
+    final homePage = app.schema['homePage']?.toString() ?? '-';
+
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF7ED),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFFED7AA)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              const Icon(Icons.account_tree_outlined,
+                  size: 16, color: Color(0xFFEA580C)),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  '当前应用 · ${app.name}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF9A3412),
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '导航：$navigationStyle  ·  首页：$homePage',
+            style: const TextStyle(
+              color: Color(0xFF9A3412),
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          if (app.versionUri != null && app.versionUri!.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: SelectableText(
+                app.versionUri!,
+                style: const TextStyle(
+                  color: Color(0xFFC2410C),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          if (routes.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            const Text(
+              '路由',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF9A3412),
+                fontSize: 12,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: routes.take(6).map((route) {
+                final path = route['path']?.toString() ?? '-';
+                final selected = path == activeRoute;
+                return ActionChip(
+                  backgroundColor: selected
+                      ? const Color(0xFFF97316)
+                      : const Color(0xFFFFEDD5),
+                  label: Text(
+                    '${route['title'] ?? route['pageSlug'] ?? '-'} · $path',
+                    style: TextStyle(
+                      color: selected ? Colors.white : const Color(0xFF9A3412),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  onPressed: () => controller.openAppRoute(path),
+                );
+              }).toList(),
+            ),
+          ],
+          if (navigation.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            const Text(
+              '导航节点',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF9A3412),
+                fontSize: 12,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: navigation.take(6).map((item) {
+                return Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFEDD5),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    item['label']?.toString() ??
+                        item['route']?.toString() ??
+                        '-',
+                    style: const TextStyle(
+                      color: Color(0xFF9A3412),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
+          if (warnings.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            ...warnings.map(
+              (warning) => Container(
+                margin: const EdgeInsets.only(top: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF3C7),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  warning,
+                  style:
+                      const TextStyle(color: Color(0xFF92400E), fontSize: 11),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPreviewSurface(
+    StudioController controller,
+    PageDocumentModel? document,
+    AppDocumentModel? appDocument,
+    List<Map<String, dynamic>> appRoutes,
+  ) {
+    if (document == null) {
+      return const Center(
+        child: Text('暂无页面'),
+      );
+    }
+
+    if (appDocument == null) {
+      return RuntimeCanvas(
+        definition: document.definition,
+        revision: controller.runtimeRevision,
+        onToolCall: controller.invokeRuntimeTool,
+      );
+    }
+
+    final layoutShellRaw = appDocument.schema['layoutShell'];
+    final layoutShell = layoutShellRaw is Map<String, dynamic>
+        ? layoutShellRaw
+        : layoutShellRaw is Map
+            ? Map<String, dynamic>.from(layoutShellRaw)
+            : <String, dynamic>{};
+    final navigationStyle =
+        layoutShell['navigationStyle']?.toString() ?? 'sidebar';
+
+    return Padding(
+      padding: const EdgeInsets.all(14),
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFFCF7),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFFF3E8D8)),
+        ),
+        child: navigationStyle == 'sidebar'
+            ? Row(
+                children: <Widget>[
+                  SizedBox(
+                    width: 220,
+                    child: _buildAppNavigationRail(
+                      controller,
+                      appDocument,
+                      appRoutes,
+                    ),
+                  ),
+                  Expanded(
+                    child: _buildAppPageViewport(controller, document),
+                  ),
+                ],
+              )
+            : Column(
+                children: <Widget>[
+                  _buildAppNavigationHeader(
+                    controller,
+                    appDocument,
+                    appRoutes,
+                    compact: navigationStyle == 'tabs',
+                  ),
+                  Expanded(
+                    child: _buildAppPageViewport(controller, document),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+
+  Widget _buildAppNavigationRail(
+    StudioController controller,
+    AppDocumentModel appDocument,
+    List<Map<String, dynamic>> appRoutes,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: const BoxDecoration(
+        color: Color(0xFFF6EDE1),
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(18),
+          bottomLeft: Radius.circular(18),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            appDocument.name,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF7C2D12),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            appDocument.description ?? 'Sidebar shell',
+            style: const TextStyle(
+              color: Color(0xFF9A3412),
+              fontSize: 12,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 16),
+          ...appRoutes.map((route) {
+            final path = route['path']?.toString() ?? '';
+            final selected = path == controller.activeAppRoute;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () => controller.openAppRoute(path),
+                child: Ink(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? const Color(0xFFEA580C)
+                        : const Color(0xFFFFF7ED),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: <Widget>[
+                      Icon(
+                        selected
+                            ? Icons.radio_button_checked
+                            : Icons.radio_button_unchecked,
+                        size: 14,
+                        color:
+                            selected ? Colors.white : const Color(0xFF9A3412),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          route['title']?.toString() ??
+                              route['pageSlug']?.toString() ??
+                              path,
+                          style: TextStyle(
+                            color: selected
+                                ? Colors.white
+                                : const Color(0xFF9A3412),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAppNavigationHeader(
+    StudioController controller,
+    AppDocumentModel appDocument,
+    List<Map<String, dynamic>> appRoutes, {
+    required bool compact,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+      decoration: const BoxDecoration(
+        color: Color(0xFFF6EDE1),
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(18),
+          topRight: Radius.circular(18),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            appDocument.name,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF7C2D12),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            appDocument.description ??
+                (compact ? 'Tabs shell' : 'Topbar shell'),
+            style: const TextStyle(
+              color: Color(0xFF9A3412),
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: appRoutes.map((route) {
+              final path = route['path']?.toString() ?? '';
+              final selected = path == controller.activeAppRoute;
+              return ChoiceChip(
+                selected: selected,
+                label: Text(
+                  route['title']?.toString() ??
+                      route['pageSlug']?.toString() ??
+                      path,
+                ),
+                onSelected: (_) => controller.openAppRoute(path),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAppPageViewport(
+    StudioController controller,
+    PageDocumentModel document,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            document.title,
+            style: const TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 18,
+              color: Color(0xFF0F172A),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            controller.activeAppRoute == null
+                ? '页面预览'
+                : '当前路由：${controller.activeAppRoute}',
+            style: const TextStyle(
+              color: Color(0xFF64748B),
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: Container(
+                color: const Color(0xFFFFFFFF),
+                child: RuntimeCanvas(
+                  definition: document.definition,
+                  revision: controller.runtimeRevision,
+                  onToolCall: controller.invokeRuntimeTool,
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -501,15 +1026,15 @@ class _StudioHomePageState extends State<StudioHomePage> {
             ),
             const SizedBox(height: 4),
             ...explanation.structure.take(6).map(
-              (item) => Text(
-                item,
-                style: const TextStyle(
-                  color: Color(0xFF78350F),
-                  fontSize: 11,
-                  height: 1.4,
+                  (item) => Text(
+                    item,
+                    style: const TextStyle(
+                      color: Color(0xFF78350F),
+                      fontSize: 11,
+                      height: 1.4,
+                    ),
+                  ),
                 ),
-              ),
-            ),
           ],
           if (explanation.actionSummary.isNotEmpty) ...[
             const SizedBox(height: 8),
@@ -523,18 +1048,18 @@ class _StudioHomePageState extends State<StudioHomePage> {
             ),
             const SizedBox(height: 4),
             ...explanation.actionSummary.take(4).map(
-              (item) => Padding(
-                padding: const EdgeInsets.only(left: 8),
-                child: Text(
-                  '· $item',
-                  style: const TextStyle(
-                    color: Color(0xFF78350F),
-                    fontSize: 11,
-                    height: 1.4,
+                  (item) => Padding(
+                    padding: const EdgeInsets.only(left: 8),
+                    child: Text(
+                      '· $item',
+                      style: const TextStyle(
+                        color: Color(0xFF78350F),
+                        fontSize: 11,
+                        height: 1.4,
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ),
           ],
         ],
       ),
@@ -723,11 +1248,91 @@ class _StudioHomePageState extends State<StudioHomePage> {
     );
   }
 
+  Widget _buildAppValidationPanel(AppValidationResultModel validation) {
+    if (validation.errors.isEmpty && validation.warnings.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 10),
+        child: Row(
+          children: const <Widget>[
+            Icon(Icons.check_circle_outline,
+                size: 16, color: Color(0xFF059669)),
+            SizedBox(width: 6),
+            Text(
+              '应用 Schema 校验通过',
+              style: TextStyle(
+                color: Color(0xFF059669),
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(top: 10),
+      constraints: const BoxConstraints(maxHeight: 160),
+      decoration: BoxDecoration(
+        color: validation.valid
+            ? const Color(0xFFFFFBEB)
+            : const Color(0xFFFEF2F2),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: validation.valid
+              ? const Color(0xFFFDE68A)
+              : const Color(0xFFFECACA),
+        ),
+      ),
+      child: ListView(
+        padding: const EdgeInsets.all(10),
+        children: <Widget>[
+          ...validation.errors.map(
+            (e) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              child: Text(
+                '${e.path}: ${e.message}',
+                style: const TextStyle(
+                  color: Color(0xFFB91C1C),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+          ...validation.warnings.map(
+            (w) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              child: Text(
+                '${w.path}: ${w.message}',
+                style: const TextStyle(
+                  color: Color(0xFF92400E),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildEditorPanel(StudioController controller) {
     return _panel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
+          if (!controller.isUsingBundledFallback) ...[
+            _buildAppBuilderPanel(controller),
+            if (controller.currentAppDocument != null) ...[
+              const SizedBox(height: 16),
+              _buildAppSchemaPanel(controller),
+            ],
+            const SizedBox(height: 16),
+            const Divider(height: 1),
+            const SizedBox(height: 12),
+          ],
           // -- AI Prompt 面板 --
           if (controller.canUseAiTools) ...[
             _buildPromptPanel(controller),
@@ -877,6 +1482,277 @@ class _StudioHomePageState extends State<StudioHomePage> {
         ],
       ),
     );
+  }
+
+  Widget _buildAppBuilderPanel(StudioController controller) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Row(
+          children: const <Widget>[
+            Icon(Icons.account_tree_outlined,
+                size: 18, color: Color(0xFFEA580C)),
+            SizedBox(width: 6),
+            Text(
+              '应用骨架',
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 16,
+                color: Color(0xFF0F172A),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _appNameController,
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: const Color(0xFFF8FAFC),
+            hintText: '例如：销售运营后台',
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide:
+                  const BorderSide(color: Color(0xFFEA580C), width: 1.5),
+            ),
+            contentPadding: const EdgeInsets.all(12),
+          ),
+          style: const TextStyle(fontSize: 13, height: 1.4),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _appDescriptionController,
+          maxLines: 2,
+          minLines: 1,
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: const Color(0xFFF8FAFC),
+            hintText: '说明这个应用包含哪些页面和导航目标',
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide:
+                  const BorderSide(color: Color(0xFFEA580C), width: 1.5),
+            ),
+            contentPadding: const EdgeInsets.all(12),
+          ),
+          style: const TextStyle(fontSize: 13, height: 1.4),
+        ),
+        const SizedBox(height: 10),
+        Container(
+          height: 36,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: _selectedNavigationStyle,
+              isDense: true,
+              style: const TextStyle(fontSize: 13, color: Color(0xFF334155)),
+              items: const <DropdownMenuItem<String>>[
+                DropdownMenuItem(value: 'sidebar', child: Text('Sidebar')),
+                DropdownMenuItem(value: 'tabs', child: Text('Tabs')),
+                DropdownMenuItem(value: 'topbar', child: Text('Topbar')),
+              ],
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() => _selectedNavigationStyle = value);
+                }
+              },
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        const Text(
+          '包含页面',
+          style: TextStyle(
+            fontWeight: FontWeight.w700,
+            fontSize: 14,
+            color: Color(0xFF0F172A),
+          ),
+        ),
+        const SizedBox(height: 8),
+        if (controller.pages.isEmpty)
+          const Text(
+            '当前还没有可编排的页面。',
+            style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
+          )
+        else
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: controller.pages.map((page) {
+              final selected = _selectedAppPageSlugs.contains(page.slug);
+              return FilterChip(
+                selected: selected,
+                label: Text(page.title),
+                onSelected: (value) {
+                  setState(() {
+                    if (value) {
+                      _selectedAppPageSlugs.add(page.slug);
+                    } else {
+                      _selectedAppPageSlugs.remove(page.slug);
+                    }
+                  });
+                },
+              );
+            }).toList(),
+          ),
+        const SizedBox(height: 8),
+        Text(
+          _selectedAppPageSlugs.isEmpty
+              ? '未勾选时会默认包含当前所有页面。'
+              : '已选择 ${_effectiveAppPageSlugs(controller).length} 个页面。',
+          style: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          height: 36,
+          child: FilledButton.icon(
+            onPressed: controller.isCreatingApp || controller.pages.isEmpty
+                ? null
+                : () {
+                    controller.createApp(
+                      name: _appNameController.text,
+                      description: _appDescriptionController.text,
+                      pageSlugs: _effectiveAppPageSlugs(controller),
+                      navigationStyle: _selectedNavigationStyle,
+                    );
+                  },
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFEA580C),
+            ),
+            icon: controller.isCreatingApp
+                ? const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(Icons.account_tree_outlined, size: 16),
+            label: Text(controller.isCreatingApp ? '创建中…' : '生成应用骨架'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAppSchemaPanel(StudioController controller) {
+    final document = controller.currentAppDocument;
+    final validation = controller.appValidationResult;
+    if (document == null) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            const Icon(Icons.schema_outlined,
+                size: 18, color: Color(0xFFB45309)),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                '应用 Schema · ${document.name}',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 16,
+                  color: Color(0xFF0F172A),
+                ),
+              ),
+            ),
+            TextButton(
+              onPressed: () => controller.validateCurrentApp(),
+              child: const Text('校验'),
+            ),
+            FilledButton(
+              onPressed: controller.isSaving
+                  ? null
+                  : () => controller.persistCurrentApp(),
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFB45309),
+              ),
+              child: controller.isSaving
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text('固化应用'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _appSourceController,
+          expands: false,
+          maxLines: 12,
+          minLines: 8,
+          style: const TextStyle(
+            fontFamily: 'Courier New',
+            fontSize: 12,
+            height: 1.4,
+            color: Color(0xFFE2E8F0),
+          ),
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: const Color(0xFF1C1917),
+            hintText: '在这里直接编辑应用 Schema',
+            hintStyle: const TextStyle(color: Color(0xFFA8A29E)),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(18),
+              borderSide: BorderSide.none,
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton(
+            onPressed: () =>
+                controller.applyAppSource(_appSourceController.text),
+            child: const Text('应用 Schema 到应用预览'),
+          ),
+        ),
+        if (validation != null) _buildAppValidationPanel(validation),
+      ],
+    );
+  }
+
+  List<String> _effectiveAppPageSlugs(StudioController controller) {
+    final visibleSlugs = controller.pages.map((page) => page.slug).toSet();
+    final selected = _selectedAppPageSlugs
+        .where(visibleSlugs.contains)
+        .toList(growable: false);
+    if (selected.isNotEmpty) {
+      return selected;
+    }
+    return controller.pages.map((page) => page.slug).toList(growable: false);
   }
 
   Widget _buildPromptPanel(StudioController controller) {
@@ -1058,11 +1934,12 @@ class _StudioHomePageState extends State<StudioHomePage> {
           width: double.infinity,
           height: 36,
           child: OutlinedButton.icon(
-            onPressed: controller.isExplaining || controller.currentDocument == null
-                ? null
-                : () {
-                    controller.explainCurrentPage();
-                  },
+            onPressed:
+                controller.isExplaining || controller.currentDocument == null
+                    ? null
+                    : () {
+                        controller.explainCurrentPage();
+                      },
             icon: controller.isExplaining
                 ? const SizedBox(
                     width: 14,
@@ -1081,7 +1958,8 @@ class _StudioHomePageState extends State<StudioHomePage> {
               onPressed: () async {
                 await Clipboard.setData(
                   ClipboardData(
-                    text: _buildExplanationClipboardText(controller.lastExplanation!),
+                    text: _buildExplanationClipboardText(
+                        controller.lastExplanation!),
                   ),
                 );
                 if (!mounted) {
@@ -1100,7 +1978,8 @@ class _StudioHomePageState extends State<StudioHomePage> {
     );
   }
 
-  String _buildExplanationClipboardText(PageExplanationResultModel explanation) {
+  String _buildExplanationClipboardText(
+      PageExplanationResultModel explanation) {
     final buffer = StringBuffer()
       ..writeln('页面解释')
       ..writeln('页面类型：${explanation.pageType}')
