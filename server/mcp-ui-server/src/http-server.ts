@@ -414,6 +414,50 @@ export function createHttpServer(options: {
             result,
           });
         }
+        case "build_android_debug": {
+          if (typeof payload.slug !== "string" || payload.slug.trim().length === 0) {
+            return jsonError(res, 400, "build_android_debug requires slug.");
+          }
+
+          const result = await options.toolService.buildAndroidDebug({
+            slug: payload.slug,
+            version:
+              typeof payload.version === "string" ? payload.version : undefined,
+            profileId:
+              typeof payload.profileId === "string" ? payload.profileId : undefined,
+            targetPlatform:
+              typeof payload.targetPlatform === "string"
+                ? payload.targetPlatform
+                : undefined,
+            buildMode:
+              typeof payload.buildMode === "string" ? payload.buildMode : undefined,
+          });
+
+          return res.json({
+            success: true,
+            result,
+          });
+        }
+        case "build_web": {
+          if (typeof payload.slug !== "string" || payload.slug.trim().length === 0) {
+            return jsonError(res, 400, "build_web requires slug.");
+          }
+
+          const result = await options.toolService.buildWeb({
+            slug: payload.slug,
+            version:
+              typeof payload.version === "string" ? payload.version : undefined,
+            profileId:
+              typeof payload.profileId === "string" ? payload.profileId : undefined,
+            buildMode:
+              typeof payload.buildMode === "string" ? payload.buildMode : undefined,
+          });
+
+          return res.json({
+            success: true,
+            result,
+          });
+        }
         case "explain_page": {
           if (!payload.definition || typeof payload.definition !== "object") {
             return jsonError(res, 400, "explain_page requires definition.");

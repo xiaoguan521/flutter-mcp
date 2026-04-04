@@ -389,6 +389,89 @@ class CreateAppResultModel {
   }
 }
 
+class AndroidBuildResultModel {
+  AndroidBuildResultModel({
+    required this.success,
+    required this.slug,
+    required this.buildMode,
+    required this.targetPlatform,
+    required this.artifactPath,
+    required this.logSummary,
+    required this.startedAt,
+    required this.completedAt,
+    this.version,
+    this.profileId,
+  });
+
+  final bool success;
+  final String slug;
+  final String? version;
+  final String? profileId;
+  final String buildMode;
+  final String targetPlatform;
+  final String artifactPath;
+  final List<String> logSummary;
+  final String startedAt;
+  final String completedAt;
+
+  factory AndroidBuildResultModel.fromJson(Map<String, dynamic> json) {
+    return AndroidBuildResultModel(
+      success: json['success'] as bool? ?? false,
+      slug: json['slug'] as String? ?? '',
+      version: json['version'] as String?,
+      profileId: json['profileId'] as String?,
+      buildMode: json['buildMode'] as String? ?? 'debug',
+      targetPlatform: json['targetPlatform'] as String? ?? 'android-arm64',
+      artifactPath: json['artifactPath'] as String? ?? '',
+      logSummary: (json['logSummary'] as List<dynamic>? ?? <dynamic>[])
+          .map((item) => item.toString())
+          .toList(),
+      startedAt: json['startedAt'] as String? ?? '',
+      completedAt: json['completedAt'] as String? ?? '',
+    );
+  }
+}
+
+class WebBuildResultModel {
+  WebBuildResultModel({
+    required this.success,
+    required this.slug,
+    required this.buildMode,
+    required this.artifactPath,
+    required this.logSummary,
+    required this.startedAt,
+    required this.completedAt,
+    this.version,
+    this.profileId,
+  });
+
+  final bool success;
+  final String slug;
+  final String? version;
+  final String? profileId;
+  final String buildMode;
+  final String artifactPath;
+  final List<String> logSummary;
+  final String startedAt;
+  final String completedAt;
+
+  factory WebBuildResultModel.fromJson(Map<String, dynamic> json) {
+    return WebBuildResultModel(
+      success: json['success'] as bool? ?? false,
+      slug: json['slug'] as String? ?? '',
+      version: json['version'] as String?,
+      profileId: json['profileId'] as String?,
+      buildMode: json['buildMode'] as String? ?? 'release',
+      artifactPath: json['artifactPath'] as String? ?? '',
+      logSummary: (json['logSummary'] as List<dynamic>? ?? <dynamic>[])
+          .map((item) => item.toString())
+          .toList(),
+      startedAt: json['startedAt'] as String? ?? '',
+      completedAt: json['completedAt'] as String? ?? '',
+    );
+  }
+}
+
 class PageTemplateModel {
   PageTemplateModel({
     required this.slug,

@@ -254,6 +254,53 @@ class PageRepository {
     );
   }
 
+  Future<AndroidBuildResultModel> buildAndroidDebug({
+    required String slug,
+    String? version,
+    String? profileId,
+    String? targetPlatform,
+    String? buildMode,
+  }) async {
+    final response = await _client.post(
+      _uri('/api/tools/build_android_debug'),
+      headers: <String, String>{'content-type': 'application/json'},
+      body: jsonEncode(<String, dynamic>{
+        'slug': slug,
+        if (version != null && version.isNotEmpty) 'version': version,
+        if (profileId != null && profileId.isNotEmpty) 'profileId': profileId,
+        if (targetPlatform != null && targetPlatform.isNotEmpty)
+          'targetPlatform': targetPlatform,
+        if (buildMode != null && buildMode.isNotEmpty) 'buildMode': buildMode,
+      }),
+    );
+    final body = _decodeBody(response);
+    return AndroidBuildResultModel.fromJson(
+      Map<String, dynamic>.from(body['result'] as Map),
+    );
+  }
+
+  Future<WebBuildResultModel> buildWeb({
+    required String slug,
+    String? version,
+    String? profileId,
+    String? buildMode,
+  }) async {
+    final response = await _client.post(
+      _uri('/api/tools/build_web'),
+      headers: <String, String>{'content-type': 'application/json'},
+      body: jsonEncode(<String, dynamic>{
+        'slug': slug,
+        if (version != null && version.isNotEmpty) 'version': version,
+        if (profileId != null && profileId.isNotEmpty) 'profileId': profileId,
+        if (buildMode != null && buildMode.isNotEmpty) 'buildMode': buildMode,
+      }),
+    );
+    final body = _decodeBody(response);
+    return WebBuildResultModel.fromJson(
+      Map<String, dynamic>.from(body['result'] as Map),
+    );
+  }
+
   Future<PageExplanationResultModel> explainPage(
     Map<String, dynamic> definition,
   ) async {

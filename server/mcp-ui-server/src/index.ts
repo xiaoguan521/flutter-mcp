@@ -30,7 +30,7 @@ async function main() {
   const seedPages = await loadSeedPages(workspaceRoot);
   await store.seedPages(seedPages);
 
-  const toolService = new ToolService(store, seedPages);
+  const toolService = new ToolService(store, seedPages, config);
 
   const shutdown = async () => {
     await store.close();
@@ -73,4 +73,3 @@ main().catch((error) => {
   log(error instanceof Error ? error.stack ?? error.message : String(error));
   process.exit(1);
 });
-

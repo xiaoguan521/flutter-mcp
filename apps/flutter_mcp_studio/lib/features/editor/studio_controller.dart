@@ -25,6 +25,8 @@ class StudioController extends ChangeNotifier {
   bool isSaving = false;
   bool isLoadingApps = false;
   bool isCreatingApp = false;
+  bool isBuildingApp = false;
+  bool isBuildingWeb = false;
   bool isGenerating = false;
   bool isExplaining = false;
   bool isApplyingInstruction = false;
@@ -56,6 +58,8 @@ class StudioController extends ChangeNotifier {
   PageUpdateResultModel? lastInstructionUpdate;
   PageValidationResultModel? validationResult;
   AppValidationResultModel? appValidationResult;
+  AndroidBuildResultModel? lastAndroidBuild;
+  WebBuildResultModel? lastWebBuild;
   List<String> lastAppWarnings = <String>[];
 
   String get prettySource => const JsonEncoder.withIndent('  ')
@@ -70,6 +74,25 @@ class StudioController extends ChangeNotifier {
 
   List<Map<String, dynamic>> get currentAppRoutes => _extractRoutesFromSchema(
       currentAppDocument?.schema ?? <String, dynamic>{});
+
+  List<Map<String, dynamic>> get currentBuildProfiles {
+    final profiles = currentAppDocument?.schema['buildProfiles'];
+    if (profiles is! List) {
+      return const <Map<String, dynamic>>[];
+    }
+    return profiles
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
+  List<Map<String, dynamic>> get androidBuildProfiles => currentBuildProfiles
+      .where((profile) => profile['target']?.toString() == 'android')
+      .toList();
+
+  List<Map<String, dynamic>> get webBuildProfiles => currentBuildProfiles
+      .where((profile) => profile['target']?.toString() == 'web')
+      .toList();
 
   List<Map<String, dynamic>> get contentBlocks {
     final definition = currentDocument?.definition;
@@ -487,6 +510,8 @@ class StudioController extends ChangeNotifier {
       selectedAppVersion = version ?? document.version;
       _bumpAppSource();
       lastAppWarnings = <String>[];
+      lastAndroidBuild = null;
+      lastWebBuild = null;
       appVersions = await repository.listAppVersions(slug);
       await _loadInitialAppRoute(document);
       await validateCurrentApp(showStatus: false, replaceWithNormalized: true);
@@ -540,6 +565,8 @@ class StudioController extends ChangeNotifier {
       selectedAppSlug = result.app.slug;
       selectedAppVersion = result.app.version;
       _bumpAppSource();
+      lastAndroidBuild = null;
+      lastWebBuild = null;
       statusMessage = '应用骨架已创建：${result.app.versionUri ?? result.versionUri}';
       await refreshApps();
       await loadApp(result.app.slug, version: result.app.version);
@@ -685,6 +712,289 @@ class StudioController extends ChangeNotifier {
       isSaving = false;
       notifyListeners();
     }
+  }
+
+  Future<void> updateCurrentAppMetadata({
+    String? name,
+    String? slug,
+    String? description,
+    String? navigationStyle,
+    String? homePage,
+  }) async {
+    await _mutateCurrentAppSchema((schema) {
+      if (name != null) {
+        final trimmed = name.trim();
+        if (trimmed.isNotEmpty) {
+          schema['name'] = trimmed;
+        }
+      }
+      if (slug != null) {
+        final normalizedSlug = _normalizeSlugInput(slug);
+        if (normalizedSlug.isNotEmpty) {
+          schema['slug'] = normalizedSlug;
+          schema['appId'] = 'app-$normalizedSlug';
+        }
+      }
+      if (description != null) {
+        schema['description'] = description.trim();
+      }
+      if (navigationStyle != null && navigationStyle.trim().isNotEmpty) {
+        final layoutShell = _ensureAppMap(schema, 'layoutShell');
+        layoutShell['navigationStyle'] = navigationStyle;
+        layoutShell['type'] = navigationStyle == 'tabs'
+            ? 'tabsShell'
+            : navigationStyle == 'topbar'
+                ? 'topNavShell'
+                : 'sidebarShell';
+      }
+      if (homePage != null) {
+        schema['homePage'] = homePage;
+      }
+      _syncAppDerivedCollections(schema);
+    });
+  }
+
+  Future<void> updateCurrentAppTheme({
+    String? mode,
+    String? primaryColor,
+  }) async {
+    await _mutateCurrentAppSchema((schema) {
+      final theme = _ensureAppMap(schema, 'theme');
+      if (mode != null && mode.trim().isNotEmpty) {
+        theme['mode'] = mode.trim();
+      }
+      if (primaryColor != null) {
+        final normalizedColor = _normalizeHexColor(primaryColor);
+        if (normalizedColor != null) {
+          theme['primaryColor'] = normalizedColor;
+        }
+      }
+    });
+  }
+
+  Future<void> addCurrentAppRoute() async {
+    if (pages.isEmpty) {
+      error = '当前没有可添加到应用的页面';
+      statusMessage = '添加应用路由失败';
+      notifyListeners();
+      return;
+    }
+
+    await _mutateCurrentAppSchema((schema) {
+      final routes = _ensureAppList(schema, 'routes');
+      final existingPageSlugs = routes
+          .whereType<Map>()
+          .map((item) => item['pageSlug']?.toString())
+          .whereType<String>()
+          .toSet();
+      final fallbackPage = pages.firstWhere(
+        (page) => !existingPageSlugs.contains(page.slug),
+        orElse: () => pages.first,
+      );
+      routes.add(<String, dynamic>{
+        'id': 'route-${fallbackPage.slug}-${routes.length + 1}',
+        'path': '/${fallbackPage.slug}',
+        'pageSlug': fallbackPage.slug,
+        'pageUri': fallbackPage.stableUri,
+        'title': fallbackPage.title,
+      });
+      _syncAppDerivedCollections(schema);
+    });
+  }
+
+  Future<void> removeCurrentAppRoute(int index) async {
+    await _mutateCurrentAppSchema((schema) {
+      final routes = _ensureAppList(schema, 'routes');
+      if (index < 0 || index >= routes.length) {
+        return;
+      }
+      routes.removeAt(index);
+      _syncAppDerivedCollections(schema);
+    });
+  }
+
+  Future<void> updateCurrentAppRoute(
+    int index, {
+    String? title,
+    String? path,
+    String? pageSlug,
+  }) async {
+    await _mutateCurrentAppSchema((schema) {
+      final routes = _ensureAppList(schema, 'routes');
+      if (index < 0 || index >= routes.length) {
+        return;
+      }
+      final route = routes[index] is Map<String, dynamic>
+          ? routes[index] as Map<String, dynamic>
+          : Map<String, dynamic>.from(routes[index] as Map);
+
+      if (title != null) {
+        route['title'] = title.trim().isEmpty ? route['title'] : title.trim();
+      }
+
+      if (pageSlug != null && pageSlug.trim().isNotEmpty) {
+        route['pageSlug'] = pageSlug;
+        final page = _lookupPageSummary(pageSlug);
+        if (page != null) {
+          route['pageUri'] = page.stableUri;
+          route['title'] = route['title']?.toString().trim().isNotEmpty == true
+              ? route['title']
+              : page.title;
+          if (path == null || path.trim().isEmpty) {
+            route['path'] = index == 0 ? '/' : '/${page.slug}';
+          }
+        }
+      }
+
+      if (path != null) {
+        final trimmed = path.trim();
+        if (trimmed.isNotEmpty) {
+          route['path'] = trimmed.startsWith('/') ? trimmed : '/$trimmed';
+        }
+      }
+
+      route['id'] ??= 'route-${route['pageSlug'] ?? index}';
+      routes[index] = route;
+      _syncAppDerivedCollections(schema);
+    });
+  }
+
+  Future<void> moveCurrentAppRoute(int oldIndex, int newIndex) async {
+    await _mutateCurrentAppSchema((schema) {
+      final routes = _ensureAppList(schema, 'routes');
+      if (oldIndex < 0 ||
+          oldIndex >= routes.length ||
+          newIndex < 0 ||
+          newIndex >= routes.length ||
+          oldIndex == newIndex) {
+        return;
+      }
+      final item = routes.removeAt(oldIndex);
+      routes.insert(newIndex, item);
+      _syncAppDerivedCollections(schema);
+    });
+  }
+
+  Future<void> setCurrentAppHomePage(String pageSlug) async {
+    await updateCurrentAppMetadata(homePage: pageSlug);
+  }
+
+  Future<void> buildCurrentAppAndroidDebug({
+    String? profileId,
+    String? targetPlatform,
+  }) async {
+    final document = currentAppDocument;
+    if (document == null) {
+      error = '当前没有可构建的应用';
+      statusMessage = '应用构建失败';
+      notifyListeners();
+      return;
+    }
+
+    isBuildingApp = true;
+    error = null;
+    notifyListeners();
+
+    try {
+      final profile = _findBuildProfile(profileId);
+      final result = await repository.buildAndroidDebug(
+        slug: document.slug,
+        version: document.version,
+        profileId: profile?['id']?.toString() ?? profileId,
+        targetPlatform: targetPlatform ?? _profileTargetPlatform(profile),
+        buildMode: _profileBuildMode(profile),
+      );
+      lastAndroidBuild = result;
+      statusMessage = 'Android Debug 构建完成';
+    } catch (buildError) {
+      error = buildError.toString();
+      statusMessage = 'Android Debug 构建失败';
+    } finally {
+      isBuildingApp = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> buildCurrentAppWeb({
+    String? profileId,
+  }) async {
+    final document = currentAppDocument;
+    if (document == null) {
+      error = '当前没有可构建的应用';
+      statusMessage = 'Web 构建失败';
+      notifyListeners();
+      return;
+    }
+
+    isBuildingWeb = true;
+    error = null;
+    notifyListeners();
+
+    try {
+      final profile = _findBuildProfile(profileId);
+      final result = await repository.buildWeb(
+        slug: document.slug,
+        version: document.version,
+        profileId: profile?['id']?.toString() ?? profileId,
+        buildMode: _profileBuildMode(profile),
+      );
+      lastWebBuild = result;
+      statusMessage = 'Web 构建完成';
+    } catch (buildError) {
+      error = buildError.toString();
+      statusMessage = 'Web 构建失败';
+    } finally {
+      isBuildingWeb = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> addCurrentBuildProfile() async {
+    await _mutateCurrentAppSchema((schema) {
+      final profiles = _ensureAppList(schema, 'buildProfiles');
+      profiles.add(<String, dynamic>{
+        'id': 'profile-${profiles.length + 1}',
+        'target': 'web',
+        'mode': 'debug',
+      });
+    });
+  }
+
+  Future<void> updateCurrentBuildProfile(
+    int index, {
+    String? id,
+    String? target,
+    String? mode,
+  }) async {
+    await _mutateCurrentAppSchema((schema) {
+      final profiles = _ensureAppList(schema, 'buildProfiles');
+      if (index < 0 || index >= profiles.length) {
+        return;
+      }
+      final profile = profiles[index] is Map<String, dynamic>
+          ? profiles[index] as Map<String, dynamic>
+          : Map<String, dynamic>.from(profiles[index] as Map);
+      if (id != null && id.trim().isNotEmpty) {
+        profile['id'] = _normalizeSlugInput(id);
+      }
+      if (target != null && target.trim().isNotEmpty) {
+        profile['target'] = target.trim();
+      }
+      if (mode != null && mode.trim().isNotEmpty) {
+        profile['mode'] = mode.trim();
+      }
+      profiles[index] = profile;
+    });
+  }
+
+  Future<void> removeCurrentBuildProfile(int index) async {
+    await _mutateCurrentAppSchema((schema) {
+      final profiles = _ensureAppList(schema, 'buildProfiles');
+      if (index < 0 || index >= profiles.length) {
+        return;
+      }
+      profiles.removeAt(index);
+    });
   }
 
   Future<void> explainCurrentPage() async {
@@ -897,6 +1207,232 @@ class StudioController extends ChangeNotifier {
       return value.trim();
     }
     return null;
+  }
+
+  Map<String, dynamic>? _findBuildProfile(String? profileId) {
+    final profiles = currentBuildProfiles;
+    if (profiles.isEmpty) {
+      return null;
+    }
+    if (profileId != null && profileId.isNotEmpty) {
+      for (final profile in profiles) {
+        if (profile['id']?.toString() == profileId) {
+          return profile;
+        }
+      }
+    }
+    return null;
+  }
+
+  String? _profileBuildMode(Map<String, dynamic>? profile) {
+    final mode = profile?['mode']?.toString();
+    if (mode == null || mode.trim().isEmpty) {
+      return null;
+    }
+    return mode.trim();
+  }
+
+  String? _profileTargetPlatform(Map<String, dynamic>? profile) {
+    final target = profile?['target']?.toString();
+    if (target == 'android') {
+      return 'android-arm64';
+    }
+    return null;
+  }
+
+  Future<void> _mutateCurrentAppSchema(
+    void Function(Map<String, dynamic> schema) mutate,
+  ) async {
+    final document = currentAppDocument;
+    if (document == null) {
+      return;
+    }
+
+    final schema = _cloneMap(document.schema);
+    mutate(schema);
+    final updatedDocument = _syncAppDocumentFromSchema(
+      document.copyWith(schema: schema),
+    );
+    currentAppDocument = updatedDocument;
+    _bumpAppSource();
+
+    final routes = _extractRoutesFromSchema(schema);
+    if (routes.isEmpty) {
+      activeAppRoute = null;
+    } else {
+      final activeRoute = routes.cast<Map<String, dynamic>?>().firstWhere(
+            (item) => item?['path']?.toString() == activeAppRoute,
+            orElse: () => null,
+          );
+      if (activeRoute == null) {
+        await _loadInitialAppRoute(updatedDocument);
+      } else {
+        final pageSlug = activeRoute['pageSlug']?.toString();
+        if (pageSlug != null &&
+            pageSlug.isNotEmpty &&
+            currentDocument?.slug != pageSlug) {
+          await loadPage(pageSlug, preserveAppContext: true);
+        }
+      }
+    }
+
+    await validateCurrentApp(showStatus: false, replaceWithNormalized: false);
+    statusMessage = '应用 Schema 已更新';
+    notifyListeners();
+  }
+
+  Map<String, dynamic> _ensureAppMap(Map<String, dynamic> schema, String key) {
+    final existing = schema[key];
+    if (existing is Map<String, dynamic>) {
+      return existing;
+    }
+    if (existing is Map) {
+      final normalized = Map<String, dynamic>.from(existing);
+      schema[key] = normalized;
+      return normalized;
+    }
+    final created = <String, dynamic>{};
+    schema[key] = created;
+    return created;
+  }
+
+  List<dynamic> _ensureAppList(Map<String, dynamic> schema, String key) {
+    final existing = schema[key];
+    if (existing is List) {
+      return existing;
+    }
+    final created = <dynamic>[];
+    schema[key] = created;
+    return created;
+  }
+
+  void _syncAppDerivedCollections(Map<String, dynamic> schema) {
+    var routes = _extractRoutesFromSchema(schema);
+    final existingPages = _ensureAppList(schema, 'pages')
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+    final requestedHomePage = schema['homePage']?.toString();
+
+    if (requestedHomePage != null && requestedHomePage.isNotEmpty) {
+      final homeIndex = routes.indexWhere(
+        (route) => route['pageSlug']?.toString() == requestedHomePage,
+      );
+      if (homeIndex > 0) {
+        final reordered = List<Map<String, dynamic>>.from(routes);
+        final homeRoute = reordered.removeAt(homeIndex);
+        reordered.insert(0, homeRoute);
+        routes = reordered;
+      }
+    }
+
+    final normalizedRoutes = <Map<String, dynamic>>[];
+    final seenPageSlugs = <String>{};
+    for (var index = 0; index < routes.length; index += 1) {
+      final route = Map<String, dynamic>.from(routes[index]);
+      final pageSlug = route['pageSlug']?.toString() ?? '';
+      final page = _lookupPageSummary(pageSlug);
+      final resolvedTitle = route['title']?.toString().trim().isNotEmpty == true
+          ? route['title'].toString().trim()
+          : page?.title ??
+              existingPages
+                  .cast<Map<String, dynamic>?>()
+                  .firstWhere(
+                    (item) => item?['slug']?.toString() == pageSlug,
+                    orElse: () => null,
+                  )?['title']
+                  ?.toString() ??
+              pageSlug;
+      final rawPath = route['path']?.toString() ?? '';
+      final resolvedPath = index == 0
+          ? '/'
+          : rawPath.trim().isNotEmpty && rawPath.trim() != '/'
+              ? _normalizeRoutePath(rawPath)
+              : '/$pageSlug';
+
+      route['id'] = route['id']?.toString().trim().isNotEmpty == true
+          ? route['id']
+          : 'route-${pageSlug.isEmpty ? index + 1 : pageSlug}';
+      route['title'] = resolvedTitle;
+      route['path'] = resolvedPath;
+      route['pageSlug'] = pageSlug;
+      route['pageUri'] = page?.stableUri ??
+          route['pageUri']?.toString() ??
+          'mcpui://pages/$pageSlug/stable';
+      normalizedRoutes.add(route);
+      if (pageSlug.isNotEmpty) {
+        seenPageSlugs.add(pageSlug);
+      }
+    }
+
+    schema['routes'] = normalizedRoutes;
+    schema['pages'] = seenPageSlugs.map((slug) {
+      final page = _lookupPageSummary(slug);
+      final existing = existingPages.cast<Map<String, dynamic>?>().firstWhere(
+            (item) => item?['slug']?.toString() == slug,
+            orElse: () => null,
+          );
+      return <String, dynamic>{
+        'slug': slug,
+        'title': page?.title ?? existing?['title']?.toString() ?? slug,
+        'pageUri': page?.stableUri ??
+            existing?['pageUri']?.toString() ??
+            'mcpui://pages/$slug/stable',
+      };
+    }).toList();
+    schema['navigation'] = normalizedRoutes
+        .map(
+          (route) => <String, dynamic>{
+            'label': route['title'],
+            'route': route['path'],
+            'pageSlug': route['pageSlug'],
+          },
+        )
+        .toList();
+
+    final homePage = schema['homePage']?.toString();
+    if (homePage == null || !seenPageSlugs.contains(homePage)) {
+      schema['homePage'] = normalizedRoutes.isNotEmpty
+          ? normalizedRoutes.first['pageSlug']
+          : null;
+    }
+  }
+
+  PageSummaryModel? _lookupPageSummary(String slug) {
+    for (final page in pages) {
+      if (page.slug == slug) {
+        return page;
+      }
+    }
+    return null;
+  }
+
+  String _normalizeRoutePath(String path) {
+    final trimmed = path.trim();
+    if (trimmed.isEmpty) {
+      return '/';
+    }
+    return trimmed.startsWith('/') ? trimmed : '/$trimmed';
+  }
+
+  String _normalizeSlugInput(String value) {
+    final normalized = value
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+        .replaceAll(RegExp(r'-{2,}'), '-')
+        .replaceAll(RegExp(r'^-|-$'), '');
+    return normalized;
+  }
+
+  String? _normalizeHexColor(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) {
+      return null;
+    }
+    final normalized = trimmed.startsWith('#') ? trimmed : '#$trimmed';
+    final valid = RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(normalized);
+    return valid ? normalized.toUpperCase() : null;
   }
 
   Future<void> _loadInitialAppRoute(AppDocumentModel document) async {

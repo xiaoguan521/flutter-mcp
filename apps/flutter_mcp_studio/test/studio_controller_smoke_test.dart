@@ -79,11 +79,19 @@ void main() {
       pageType: 'dashboard',
     );
     await controller.persistCurrentPage();
+    await repository.savePage(
+      slug: 'orders',
+      title: 'Orders',
+      description: 'Order list page',
+      author: 'studio-user',
+      definition: repository._buildBaseDefinition(title: 'Orders'),
+    );
+    await controller.refreshPages();
 
     await controller.createApp(
       name: '销售运营后台',
       description: '包含 dashboard 首页',
-      pageSlugs: const <String>['ai-customer-list'],
+      pageSlugs: const <String>['ai-customer-list', 'orders'],
       navigationStyle: 'tabs',
     );
 
@@ -92,7 +100,7 @@ void main() {
     expect(controller.currentAppDocument!.schema['type'], 'app');
     expect(
         controller.currentAppDocument!.schema['homePage'], 'ai-customer-list');
-    expect((controller.currentAppDocument!.schema['routes'] as List).length, 1);
+    expect((controller.currentAppDocument!.schema['routes'] as List).length, 2);
     expect(controller.activeAppRoute, '/');
     expect(controller.currentDocument?.slug, 'ai-customer-list');
     expect(controller.apps, isNotEmpty);
@@ -105,6 +113,88 @@ void main() {
     expect(controller.activeAppRoute, '/');
     expect(controller.currentAppDocument!.schema['layoutShell'], isNotNull);
 
+    await controller.updateCurrentAppMetadata(
+      name: '销售运营工作台',
+      slug: 'sales-workbench',
+      description: '新的应用描述',
+      navigationStyle: 'sidebar',
+    );
+
+    expect(controller.currentAppDocument!.name, '销售运营工作台');
+    expect(controller.currentAppDocument!.slug, 'sales-workbench');
+    expect(controller.currentAppDocument!.schema['description'], '新的应用描述');
+    expect(
+      (controller.currentAppDocument!.schema['layoutShell']
+          as Map<String, dynamic>)['navigationStyle'],
+      'sidebar',
+    );
+
+    await controller.updateCurrentAppTheme(
+      mode: 'dark',
+      primaryColor: '#1D4ED8',
+    );
+
+    expect(
+      (controller.currentAppDocument!.schema['theme']
+          as Map<String, dynamic>)['mode'],
+      'dark',
+    );
+    expect(
+      (controller.currentAppDocument!.schema['theme']
+          as Map<String, dynamic>)['primaryColor'],
+      '#1D4ED8',
+    );
+
+    await controller.addCurrentBuildProfile();
+    await controller.updateCurrentBuildProfile(
+      0,
+      id: 'web-release',
+      target: 'web',
+      mode: 'release',
+    );
+
+    final firstProfile =
+        (controller.currentAppDocument!.schema['buildProfiles'] as List).first
+            as Map<String, dynamic>;
+    expect(firstProfile['id'], 'web-release');
+    expect(firstProfile['mode'], 'release');
+
+    await controller.updateCurrentAppRoute(
+      1,
+      title: '详情页',
+      path: '/details',
+    );
+
+    final secondRoute = (controller.currentAppDocument!.schema['routes']
+        as List)[1] as Map<String, dynamic>;
+    expect(secondRoute['title'], '详情页');
+    expect(secondRoute['path'], '/details');
+
+    await controller.addCurrentAppRoute();
+
+    expect((controller.currentAppDocument!.schema['routes'] as List).length, 3);
+
+    await controller.moveCurrentAppRoute(2, 1);
+
+    expect(
+      ((controller.currentAppDocument!.schema['routes'] as List)[1]
+          as Map<String, dynamic>)['pageSlug'],
+      'ai-customer-list',
+    );
+
+    await controller.setCurrentAppHomePage('orders');
+
+    expect(controller.currentAppDocument!.schema['homePage'], 'orders');
+    expect(
+      ((controller.currentAppDocument!.schema['routes'] as List).first
+          as Map<String, dynamic>)['pageSlug'],
+      'orders',
+    );
+
+    await controller.removeCurrentAppRoute(1);
+
+    expect((controller.currentAppDocument!.schema['routes'] as List).length, 2);
+
     await controller.applyAppSource(
       jsonEncode(<String, dynamic>{
         ...controller.currentAppDocument!.schema,
@@ -115,10 +205,28 @@ void main() {
     expect(controller.appValidationResult?.valid, isTrue);
     expect(controller.currentAppDocument!.schema['description'], '已人工调整的应用骨架');
 
+    await controller.buildCurrentAppAndroidDebug();
+
+    expect(controller.lastAndroidBuild, isNotNull);
+    expect(controller.lastAndroidBuild!.success, isTrue);
+    expect(controller.lastAndroidBuild!.profileId, isNull);
+    expect(
+        controller.lastAndroidBuild!.artifactPath, contains('app-debug.apk'));
+
+    await controller.buildCurrentAppWeb(profileId: 'web-release');
+
+    expect(controller.lastWebBuild, isNotNull);
+    expect(controller.lastWebBuild!.success, isTrue);
+    expect(controller.lastWebBuild!.profileId, 'web-release');
+    expect(controller.lastWebBuild!.buildMode, 'release');
+    expect(controller.lastWebBuild!.artifactPath, contains(r'build\web'));
+
     final savedApp = await controller.persistCurrentApp();
 
     expect(savedApp.app.version, 'v2');
+    expect(savedApp.app.slug, 'sales-workbench');
     expect(controller.selectedAppVersion, 'v2');
+    expect(controller.selectedAppSlug, 'sales-workbench');
   });
 }
 
@@ -533,6 +641,54 @@ class _FakePageRepository extends PageRepository {
       app: app,
       stableUri: app.stableUri!,
       versionUri: app.versionUri!,
+    );
+  }
+
+  @override
+  Future<AndroidBuildResultModel> buildAndroidDebug({
+    required String slug,
+    String? version,
+    String? profileId,
+    String? targetPlatform,
+    String? buildMode,
+  }) async {
+    return AndroidBuildResultModel(
+      success: true,
+      slug: slug,
+      version: version,
+      profileId: profileId,
+      buildMode: buildMode ?? 'debug',
+      targetPlatform: targetPlatform ?? 'android-arm64',
+      artifactPath:
+          r'M:\flutter-mcp\apps\flutter_mcp_studio\build\app\outputs\flutter-apk\app-debug.apk',
+      logSummary: const <String>[
+        'APK build completed successfully.',
+      ],
+      startedAt: '2026-04-04T10:00:00.000Z',
+      completedAt: '2026-04-04T10:05:00.000Z',
+    );
+  }
+
+  @override
+  Future<WebBuildResultModel> buildWeb({
+    required String slug,
+    String? version,
+    String? profileId,
+    String? buildMode,
+  }) async {
+    return WebBuildResultModel(
+      success: true,
+      slug: slug,
+      version: version,
+      profileId: profileId,
+      buildMode: buildMode ?? 'release',
+      artifactPath: r'M:\flutter-mcp\apps\flutter_mcp_studio\build\web',
+      logSummary: const <String>[
+        'Compiling lib/main.dart for the Web...',
+        'Built build\\web',
+      ],
+      startedAt: '2026-04-04T10:10:00.000Z',
+      completedAt: '2026-04-04T10:12:00.000Z',
     );
   }
 

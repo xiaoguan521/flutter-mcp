@@ -1,8 +1,15 @@
+import { spawn } from "node:child_process";
+import { resolve } from "node:path";
+
 import { createAppSchema, validateAppSchema } from "./app-tools.js";
 import type {
   AppSnapshot,
   AppSummary,
   AppVersionSummary,
+  BuildAndroidDebugInput,
+  BuildAndroidDebugResult,
+  BuildWebInput,
+  BuildWebResult,
   ComponentCatalogItem,
   ExplainPageInput,
   ExplainPageResult,
@@ -22,6 +29,7 @@ import type {
   UpdatePageByInstructionResult,
   ValidateAppResult,
   ValidatePageResult,
+  AppConfig,
 } from "./types.js";
 import {
   explainPageDefinition,
@@ -40,6 +48,7 @@ export class ToolService {
   constructor(
     private readonly store: PageStore,
     private readonly seedPages: SeedPage[],
+    private readonly config?: AppConfig,
   ) {}
 
   async listPages() {
@@ -179,6 +188,137 @@ export class ToolService {
     return validateAppSchema(input.schema);
   }
 
+  async buildAndroidDebug(
+    input: BuildAndroidDebugInput,
+  ): Promise<BuildAndroidDebugResult> {
+    if (!this.config) {
+      throw new Error("Build tools are unavailable without server config.");
+    }
+
+    const app = await this.store.getApp(input.slug, input.version);
+    if (!app) {
+      throw new Error(`App not found: ${input.slug}`);
+    }
+
+    const startedAt = new Date().toISOString();
+    const projectDir = resolve(this.config.workspaceRoot, "apps", "flutter_mcp_studio");
+    const scriptPath = resolve(projectDir, "build-android-apk.ps1");
+    const buildMode = typeof input.buildMode === "string" && input.buildMode.trim().length > 0
+      ? input.buildMode.trim()
+      : "debug";
+    const targetPlatform =
+      typeof input.targetPlatform === "string" && input.targetPlatform.trim().length > 0
+        ? input.targetPlatform.trim()
+        : "android-arm64";
+
+    const args = [
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      scriptPath,
+      "-BuildMode",
+      buildMode,
+      "-TargetPlatform",
+      targetPlatform,
+    ];
+
+    const output = await new Promise<string>((resolveOutput, rejectOutput) => {
+      const child = spawn("powershell", args, {
+        cwd: projectDir,
+        env: process.env,
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+
+      let combined = "";
+      child.stdout.on("data", (chunk) => {
+        combined += chunk.toString();
+      });
+      child.stderr.on("data", (chunk) => {
+        combined += chunk.toString();
+      });
+      child.on("error", rejectOutput);
+      child.on("close", (code) => {
+        if (code === 0) {
+          resolveOutput(combined);
+          return;
+        }
+        rejectOutput(new Error(combined || `Android build failed with exit code ${code ?? "unknown"}.`));
+      });
+    });
+
+    const artifactPath = this.extractBuildArtifactPath(output);
+    const completedAt = new Date().toISOString();
+    const logSummary = output
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
+      .slice(-12);
+
+    return {
+      success: true,
+      slug: app.slug,
+      version: app.version,
+      profileId: typeof input.profileId === "string" ? input.profileId : undefined,
+      buildMode,
+      targetPlatform,
+      artifactPath,
+      logSummary,
+      startedAt,
+      completedAt,
+    };
+  }
+
+  async buildWeb(
+    input: BuildWebInput,
+  ): Promise<BuildWebResult> {
+    if (!this.config) {
+      throw new Error("Build tools are unavailable without server config.");
+    }
+
+    const app = await this.store.getApp(input.slug, input.version);
+    if (!app) {
+      throw new Error(`App not found: ${input.slug}`);
+    }
+
+    const startedAt = new Date().toISOString();
+    const projectDir = resolve(this.config.workspaceRoot, "apps", "flutter_mcp_studio");
+    const buildMode =
+      typeof input.buildMode === "string" && input.buildMode.trim().length > 0
+        ? input.buildMode.trim()
+        : "release";
+
+    const output = await this.runProcess(
+      "powershell",
+      [
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        `flutter build web --${buildMode}`,
+      ],
+      projectDir,
+    );
+
+    const completedAt = new Date().toISOString();
+    const artifactPath = resolve(projectDir, "build", "web");
+    const logSummary = output
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
+      .slice(-12);
+
+    return {
+      success: true,
+      slug: app.slug,
+      version: app.version,
+      profileId: typeof input.profileId === "string" ? input.profileId : undefined,
+      buildMode,
+      artifactPath,
+      logSummary,
+      startedAt,
+      completedAt,
+    };
+  }
+
   async updatePageByInstruction(
     input: UpdatePageByInstructionInput,
   ): Promise<UpdatePageByInstructionResult> {
@@ -195,5 +335,47 @@ export class ToolService {
     input: ListComponentsInput = {},
   ): Promise<ComponentCatalogItem[]> {
     return listComponentCatalog(input);
+  }
+
+  private extractBuildArtifactPath(output: string): string {
+    const match = output.match(/APK Path\s*:\s*(.+)/);
+    if (!match) {
+      throw new Error("Android build finished but APK path was not found in output.");
+    }
+    return match[1]!.trim();
+  }
+
+  private async runProcess(
+    command: string,
+    args: string[],
+    cwd: string,
+  ): Promise<string> {
+    return await new Promise<string>((resolveOutput, rejectOutput) => {
+      const child = spawn(command, args, {
+        cwd,
+        env: process.env,
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+
+      let combined = "";
+      child.stdout.on("data", (chunk) => {
+        combined += chunk.toString();
+      });
+      child.stderr.on("data", (chunk) => {
+        combined += chunk.toString();
+      });
+      child.on("error", rejectOutput);
+      child.on("close", (code) => {
+        if (code === 0) {
+          resolveOutput(combined);
+          return;
+        }
+        rejectOutput(
+          new Error(
+            combined || `Process failed with exit code ${code ?? "unknown"}.`,
+          ),
+        );
+      });
+    });
   }
 }

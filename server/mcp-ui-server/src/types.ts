@@ -242,6 +242,50 @@ export interface ValidateAppResult {
   normalizedSchema: JsonObject;
 }
 
+export interface BuildAndroidDebugInput {
+  [key: string]: unknown;
+  slug: string;
+  version?: string;
+  profileId?: string;
+  targetPlatform?: string;
+  buildMode?: string;
+}
+
+export interface BuildAndroidDebugResult {
+  [key: string]: unknown;
+  success: boolean;
+  slug: string;
+  version?: string;
+  profileId?: string;
+  buildMode: string;
+  targetPlatform: string;
+  artifactPath: string;
+  logSummary: string[];
+  startedAt: string;
+  completedAt: string;
+}
+
+export interface BuildWebInput {
+  [key: string]: unknown;
+  slug: string;
+  version?: string;
+  profileId?: string;
+  buildMode?: string;
+}
+
+export interface BuildWebResult {
+  [key: string]: unknown;
+  success: boolean;
+  slug: string;
+  version?: string;
+  profileId?: string;
+  buildMode: string;
+  artifactPath: string;
+  logSummary: string[];
+  startedAt: string;
+  completedAt: string;
+}
+
 export interface ListComponentsInput {
   [key: string]: unknown;
   category?: string;

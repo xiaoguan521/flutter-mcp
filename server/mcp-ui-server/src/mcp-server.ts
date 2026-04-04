@@ -341,6 +341,64 @@ export function createMcpUiServer(options: {
   );
 
   server.registerTool(
+    "build_android_debug",
+    {
+      title: "Build Android debug APK",
+      description:
+        "Build the current Flutter MCP Studio Android debug APK for a saved app schema.",
+      inputSchema: {
+        slug: z.string().min(1),
+        version: z.string().optional(),
+        profileId: z.string().optional(),
+        targetPlatform: z.string().optional(),
+        buildMode: z.string().optional(),
+      },
+    },
+    async ({ slug, version, profileId, targetPlatform, buildMode }) => {
+      const result = await options.toolService.buildAndroidDebug({
+        slug,
+        version,
+        profileId,
+        targetPlatform,
+        buildMode,
+      });
+
+      return {
+        content: [asTextBlock(result)],
+        structuredContent: result,
+      };
+    },
+  );
+
+  server.registerTool(
+    "build_web",
+    {
+      title: "Build Flutter web bundle",
+      description:
+        "Build the current Flutter MCP Studio web bundle for a saved app schema.",
+      inputSchema: {
+        slug: z.string().min(1),
+        version: z.string().optional(),
+        profileId: z.string().optional(),
+        buildMode: z.string().optional(),
+      },
+    },
+    async ({ slug, version, profileId, buildMode }) => {
+      const result = await options.toolService.buildWeb({
+        slug,
+        version,
+        profileId,
+        buildMode,
+      });
+
+      return {
+        content: [asTextBlock(result)],
+        structuredContent: result,
+      };
+    },
+  );
+
+  server.registerTool(
     "explain_page",
     {
       title: "Explain page DSL",
