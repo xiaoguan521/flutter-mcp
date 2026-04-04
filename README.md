@@ -158,6 +158,38 @@ npm --workspace server/mcp-ui-server run dev
 
 ## 本地运行
 
+### macOS 快速启动
+
+如果你在 macOS 上本地开发，推荐先安装：
+
+```bash
+brew install openjdk@17
+brew install --cask flutter
+```
+
+仓库已经提供了可直接复用的启动脚本：
+
+```bash
+cd /Users/xiaochen/Downloads/flutter-mcp
+./scripts/run-server.sh
+```
+
+另开一个终端：
+
+```bash
+cd /Users/xiaochen/Downloads/flutter-mcp
+./scripts/run-studio-web.sh
+```
+
+如需仅验证 Web 构建：
+
+```bash
+cd /Users/xiaochen/Downloads/flutter-mcp
+./scripts/build-studio-web.sh
+```
+
+这些脚本会自动尝试注入 Homebrew 安装的 `openjdk@17`，默认把 Flutter Studio 指向 `http://127.0.0.1:8787`。其中 `build-studio-web.sh` 会为当前依赖组合关闭 web icon tree shaking 以避免构建失败。
+
 ### 1. 启动 MCP UI Server
 
 ```powershell
