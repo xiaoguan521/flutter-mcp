@@ -25,6 +25,7 @@ class StudioController extends ChangeNotifier {
   bool isSaving = false;
   bool isLoadingApps = false;
   bool isCreatingApp = false;
+  bool isGeneratingApp = false;
   bool isBuildingApp = false;
   bool isBuildingWeb = false;
   bool isGenerating = false;
@@ -60,6 +61,7 @@ class StudioController extends ChangeNotifier {
   AppValidationResultModel? appValidationResult;
   AndroidBuildResultModel? lastAndroidBuild;
   WebBuildResultModel? lastWebBuild;
+  GeneratedAppResultModel? lastGeneratedApp;
   List<String> lastAppWarnings = <String>[];
 
   String get prettySource => const JsonEncoder.withIndent('  ')
@@ -567,6 +569,7 @@ class StudioController extends ChangeNotifier {
       _bumpAppSource();
       lastAndroidBuild = null;
       lastWebBuild = null;
+      lastGeneratedApp = null;
       statusMessage = '应用骨架已创建：${result.app.versionUri ?? result.versionUri}';
       await refreshApps();
       await loadApp(result.app.slug, version: result.app.version);
@@ -575,6 +578,59 @@ class StudioController extends ChangeNotifier {
       statusMessage = '应用创建失败';
     } finally {
       isCreatingApp = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> generateAppFromPrompt({
+    required String prompt,
+    String? navigationStyle,
+    String? locale,
+  }) async {
+    final trimmedPrompt = prompt.trim();
+    if (trimmedPrompt.isEmpty) {
+      error = '请输入应用需求描述';
+      statusMessage = 'AI 生成应用失败';
+      notifyListeners();
+      return;
+    }
+
+    if (isUsingBundledFallback) {
+      error = '当前服务端不可用，暂时无法生成应用骨架';
+      statusMessage = 'AI 生成应用不可用';
+      notifyListeners();
+      return;
+    }
+
+    isGeneratingApp = true;
+    error = null;
+    notifyListeners();
+
+    try {
+      final result = await repository.generateAppFromPrompt(
+        prompt: trimmedPrompt,
+        navigationStyle: navigationStyle,
+        locale: locale,
+      );
+      lastGeneratedApp = result;
+      currentAppDocument = _syncAppDocumentFromSchema(
+        result.app.copyWith(schema: _cloneMap(result.app.schema)),
+      );
+      selectedAppSlug = result.app.slug;
+      selectedAppVersion = result.app.version;
+      lastAppWarnings = result.warnings;
+      lastAndroidBuild = null;
+      lastWebBuild = null;
+      _bumpAppSource();
+      statusMessage = 'AI 多页应用已生成';
+      await refreshPages();
+      await refreshApps();
+      await loadApp(result.app.slug, version: result.app.version);
+    } catch (generationError) {
+      error = generationError.toString();
+      statusMessage = 'AI 生成应用失败';
+    } finally {
+      isGeneratingApp = false;
       notifyListeners();
     }
   }

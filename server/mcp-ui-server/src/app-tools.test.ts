@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createAppSchema, validateAppSchema } from "./app-tools.js";
+import {
+  createAppSchema,
+  generateAppBlueprint,
+  validateAppSchema,
+} from "./app-tools.js";
 
 test("createAppSchema builds routes and navigation from page references", () => {
   const schema = createAppSchema(
@@ -49,4 +53,17 @@ test("validateAppSchema normalizes missing app fields and reports issues", () =>
   assert.equal(result.normalizedSchema.slug, "my-console");
   assert.ok(result.warnings.some((item) => item.path === "pages"));
   assert.ok(result.errors.some((item) => item.path === "routes[0].path"));
+});
+
+test("generateAppBlueprint returns a multi-page shell plan from prompt", () => {
+  const blueprint = generateAppBlueprint({
+    prompt: "生成一个订单管理后台，包含总览、订单列表、订单详情和设置",
+    navigationStyle: "tabs",
+  });
+
+  assert.equal(blueprint.navigationStyle, "tabs");
+  assert.ok(blueprint.pages.length >= 3);
+  assert.equal(blueprint.pages[0]?.pageType, "dashboard");
+  assert.ok(blueprint.pages.some((page) => page.pageType === "table-list"));
+  assert.ok(blueprint.pages.some((page) => page.pageType === "form"));
 });

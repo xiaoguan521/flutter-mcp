@@ -237,6 +237,36 @@ export function createMcpUiServer(options: {
   );
 
   server.registerTool(
+    "generate_app_from_prompt",
+    {
+      title: "Generate app from prompt",
+      description:
+        "Generate a multi-page app skeleton from a natural-language request, create the pages, and persist the app schema.",
+      inputSchema: {
+        prompt: z.string().min(1),
+        name: z.string().optional(),
+        slug: z.string().optional(),
+        navigationStyle: z.string().optional(),
+        locale: z.string().optional(),
+      },
+    },
+    async ({ prompt, name, slug, navigationStyle, locale }) => {
+      const result = await options.toolService.generateAppFromPrompt({
+        prompt,
+        name,
+        slug,
+        navigationStyle,
+        locale,
+      });
+
+      return {
+        content: [asTextBlock(result)],
+        structuredContent: result,
+      };
+    },
+  );
+
+  server.registerTool(
     "generate_page",
     {
       title: "Generate sample page",

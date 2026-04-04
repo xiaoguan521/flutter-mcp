@@ -160,6 +160,35 @@ export interface CreateAppResult {
   warnings: string[];
 }
 
+export interface GenerateAppFromPromptInput {
+  [key: string]: unknown;
+  prompt: string;
+  name?: string;
+  slug?: string;
+  navigationStyle?: string;
+  locale?: string;
+}
+
+export interface GeneratedAppPageResult {
+  [key: string]: unknown;
+  slug: string;
+  title: string;
+  pageType: string;
+  stableUri: string;
+  versionUri: string;
+}
+
+export interface GeneratedAppResult {
+  [key: string]: unknown;
+  app: AppSnapshot;
+  stableUri: string;
+  versionUri: string;
+  summary: string;
+  warnings: string[];
+  assumptions: string[];
+  generatedPages: GeneratedAppPageResult[];
+}
+
 export interface GeneratePageFromPromptInput {
   [key: string]: unknown;
   prompt: string;

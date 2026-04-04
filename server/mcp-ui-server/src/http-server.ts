@@ -346,6 +346,27 @@ export function createHttpServer(options: {
             result,
           });
         }
+        case "generate_app_from_prompt": {
+          if (typeof payload.prompt !== "string" || payload.prompt.trim().length === 0) {
+            return jsonError(res, 400, "generate_app_from_prompt requires prompt.");
+          }
+
+          const result = await options.toolService.generateAppFromPrompt({
+            prompt: payload.prompt,
+            name: typeof payload.name === "string" ? payload.name : undefined,
+            slug: typeof payload.slug === "string" ? payload.slug : undefined,
+            navigationStyle:
+              typeof payload.navigationStyle === "string"
+                ? payload.navigationStyle
+                : undefined,
+            locale: typeof payload.locale === "string" ? payload.locale : undefined,
+          });
+
+          return res.status(201).json({
+            success: true,
+            result,
+          });
+        }
         case "generate_page": {
           const result = await options.toolService.generatePage({
             template: String(payload.template ?? ""),

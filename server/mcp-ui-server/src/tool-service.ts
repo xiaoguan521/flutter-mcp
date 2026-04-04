@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { resolve } from "node:path";
 
-import { createAppSchema, validateAppSchema } from "./app-tools.js";
+import { createAppSchema, generateAppBlueprint, validateAppSchema } from "./app-tools.js";
 import type {
   AppSnapshot,
   AppSummary,
@@ -15,7 +15,9 @@ import type {
   ExplainPageResult,
   CreateAppInput,
   CreateAppResult,
+  GeneratedAppResult,
   GeneratePageInput,
+  GenerateAppFromPromptInput,
   GeneratePageFromPromptInput,
   GeneratedPageResult,
   JsonObject,
@@ -152,6 +154,93 @@ export class ToolService {
       stableUri: saveResult.stableUri,
       versionUri: saveResult.versionUri,
       warnings,
+    };
+  }
+
+  async generateAppFromPrompt(
+    input: GenerateAppFromPromptInput,
+  ): Promise<GeneratedAppResult> {
+    if (typeof input.prompt !== "string" || input.prompt.trim().length === 0) {
+      throw new Error("generate_app_from_prompt requires prompt.");
+    }
+
+    const blueprint = generateAppBlueprint(input);
+    const warnings: string[] = [];
+    const generatedPages = [];
+    const appPages = [];
+
+    for (const pagePlan of blueprint.pages) {
+      const generated = await this.generatePageFromPrompt({
+        prompt: pagePlan.promptHint,
+        pageType: pagePlan.pageType,
+        slug: pagePlan.slug,
+        title: pagePlan.title,
+        locale: input.locale,
+      });
+
+      const savedPage = await this.store.savePage({
+        slug: generated.slug,
+        title: generated.title,
+        description: generated.summary,
+        author: "ai",
+        note: "Generated from app prompt",
+        makeStable: true,
+        definition: generated.definition,
+      });
+
+      appPages.push({
+        slug: savedPage.page.slug,
+        title: savedPage.page.title,
+        pageUri: savedPage.page.stableUri,
+      });
+      generatedPages.push({
+        slug: savedPage.page.slug,
+        title: savedPage.page.title,
+        pageType: generated.pageType,
+        stableUri: savedPage.page.stableUri,
+        versionUri: savedPage.page.versionUri,
+      });
+      warnings.push(...generated.warnings);
+    }
+
+    const schema = createAppSchema(
+      {
+        name: blueprint.name,
+        slug: blueprint.slug,
+        description: blueprint.description,
+        navigationStyle: blueprint.navigationStyle,
+      },
+      appPages,
+    );
+    const validation = validateAppSchema(schema);
+    warnings.push(...validation.warnings.map((item) => `${item.path}: ${item.message}`));
+    if (!validation.valid) {
+      throw new Error(
+        `Invalid generated app schema: ${validation.errors.map((item) => `${item.path}: ${item.message}`).join("; ")}`,
+      );
+    }
+
+    const saveResult = await this.store.saveApp({
+      slug: String(validation.normalizedSchema.slug),
+      name: String(validation.normalizedSchema.name),
+      description:
+        typeof validation.normalizedSchema.description === "string"
+          ? validation.normalizedSchema.description
+          : blueprint.description,
+      author: "ai",
+      note: "Generated from app prompt",
+      makeStable: true,
+      schema: validation.normalizedSchema,
+    });
+
+    return {
+      app: saveResult.app,
+      stableUri: saveResult.stableUri,
+      versionUri: saveResult.versionUri,
+      summary: blueprint.summary,
+      warnings,
+      assumptions: blueprint.assumptions,
+      generatedPages,
     };
   }
 

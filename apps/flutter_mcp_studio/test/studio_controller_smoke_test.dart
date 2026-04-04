@@ -228,6 +228,29 @@ void main() {
     expect(controller.selectedAppVersion, 'v2');
     expect(controller.selectedAppSlug, 'sales-workbench');
   });
+
+  test('StudioController can generate a multi-page app from prompt', () async {
+    final repository = _FakePageRepository();
+    final draftStore = _FakeLocalDraftStore();
+    final mcpBridge = _FakeMcpBridgeService();
+    final controller = StudioController(
+      repository: repository,
+      draftStore: draftStore,
+      mcpBridgeService: mcpBridge,
+    );
+
+    await controller.generateAppFromPrompt(
+      prompt: '生成一个订单管理后台，包含总览、订单列表、订单详情和设置页',
+      navigationStyle: 'tabs',
+    );
+
+    expect(controller.lastGeneratedApp, isNotNull);
+    expect(controller.currentAppDocument, isNotNull);
+    expect(controller.currentAppDocument!.schema['type'], 'app');
+    expect(controller.currentAppRoutes.length, greaterThanOrEqualTo(3));
+    expect(controller.pages.length, greaterThanOrEqualTo(3));
+    expect(controller.selectedAppSlug, 'ai-order-management');
+  });
 }
 
 class _FakePageRepository extends PageRepository {
@@ -549,6 +572,163 @@ class _FakePageRepository extends PageRepository {
       stableUri: app.stableUri!,
       versionUri: app.versionUri!,
       warnings: const <String>[],
+    );
+  }
+
+  @override
+  Future<GeneratedAppResultModel> generateAppFromPrompt({
+    required String prompt,
+    String? name,
+    String? slug,
+    String? navigationStyle,
+    String? locale,
+  }) async {
+    final generatedPages = <GeneratedAppPageResultModel>[
+      GeneratedAppPageResultModel(
+        slug: 'ai-order-management-dashboard',
+        title: '订单总览',
+        pageType: 'dashboard',
+        stableUri: 'mcpui://pages/ai-order-management-dashboard/stable',
+        versionUri: 'mcpui://pages/ai-order-management-dashboard/versions/v1',
+      ),
+      GeneratedAppPageResultModel(
+        slug: 'ai-order-management-list',
+        title: '订单列表',
+        pageType: 'table-list',
+        stableUri: 'mcpui://pages/ai-order-management-list/stable',
+        versionUri: 'mcpui://pages/ai-order-management-list/versions/v1',
+      ),
+      GeneratedAppPageResultModel(
+        slug: 'ai-order-management-detail',
+        title: '订单详情',
+        pageType: 'form',
+        stableUri: 'mcpui://pages/ai-order-management-detail/stable',
+        versionUri: 'mcpui://pages/ai-order-management-detail/versions/v1',
+      ),
+    ];
+
+    for (final page in generatedPages) {
+      await savePage(
+        slug: page.slug,
+        title: page.title,
+        description: 'AI generated page',
+        author: 'ai',
+        definition: _buildBaseDefinition(title: page.title),
+      );
+    }
+
+    final app = AppDocumentModel(
+      appId: 'app-ai-order-management',
+      slug: 'ai-order-management',
+      name: '订单管理后台',
+      description: 'AI generated multi-page app',
+      version: 'v1',
+      author: 'ai',
+      note: 'Generated from app prompt',
+      stableUri: 'mcpui://apps/ai-order-management/stable',
+      versionUri: 'mcpui://apps/ai-order-management/versions/v1',
+      createdAt: '2026-04-04T11:00:00.000Z',
+      updatedAt: '2026-04-04T11:00:00.000Z',
+      isStable: true,
+      schema: <String, dynamic>{
+        'type': 'app',
+        'appId': 'app-ai-order-management',
+        'slug': 'ai-order-management',
+        'name': '订单管理后台',
+        'description': 'AI generated multi-page app',
+        'layoutShell': <String, dynamic>{
+          'type': 'tabsShell',
+          'navigationStyle': navigationStyle ?? 'tabs',
+        },
+        'pages': generatedPages
+            .map(
+              (page) => <String, dynamic>{
+                'slug': page.slug,
+                'title': page.title,
+                'pageUri': page.stableUri,
+              },
+            )
+            .toList(),
+        'routes': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'id': 'route-dashboard',
+            'path': '/',
+            'pageSlug': generatedPages[0].slug,
+            'pageUri': generatedPages[0].stableUri,
+            'title': generatedPages[0].title,
+          },
+          <String, dynamic>{
+            'id': 'route-list',
+            'path': '/orders',
+            'pageSlug': generatedPages[1].slug,
+            'pageUri': generatedPages[1].stableUri,
+            'title': generatedPages[1].title,
+          },
+          <String, dynamic>{
+            'id': 'route-detail',
+            'path': '/detail',
+            'pageSlug': generatedPages[2].slug,
+            'pageUri': generatedPages[2].stableUri,
+            'title': generatedPages[2].title,
+          },
+        ],
+        'navigation': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'label': generatedPages[0].title,
+            'route': '/',
+            'pageSlug': generatedPages[0].slug,
+          },
+          <String, dynamic>{
+            'label': generatedPages[1].title,
+            'route': '/orders',
+            'pageSlug': generatedPages[1].slug,
+          },
+          <String, dynamic>{
+            'label': generatedPages[2].title,
+            'route': '/detail',
+            'pageSlug': generatedPages[2].slug,
+          },
+        ],
+        'homePage': generatedPages[0].slug,
+        'buildProfiles': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'id': 'web-release',
+            'target': 'web',
+            'mode': 'release'
+          },
+          <String, dynamic>{
+            'id': 'android-debug',
+            'target': 'android',
+            'mode': 'debug'
+          },
+        ],
+      },
+    );
+    _apps[app.slug] = app;
+    _appVersions[app.slug] = <AppVersionModel>[
+      AppVersionModel(
+        slug: app.slug,
+        name: app.name,
+        version: 'v1',
+        createdAt: '2026-04-04T11:00:00.000Z',
+        isStable: true,
+        author: 'ai',
+        stableUri: app.stableUri!,
+        versionUri: app.versionUri!,
+        note: app.note,
+      ),
+    ];
+
+    return GeneratedAppResultModel(
+      app: app,
+      stableUri: app.stableUri!,
+      versionUri: app.versionUri!,
+      summary: 'Generated 3 pages for a tabs application shell.',
+      warnings: const <String>[],
+      assumptions: const <String>[
+        'Used one dashboard page as the home entry.',
+      ],
+      generatedPages: generatedPages,
     );
   }
 

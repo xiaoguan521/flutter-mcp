@@ -1,6 +1,7 @@
 import { normalizeSlug } from "./uri.js";
 import type {
   CreateAppInput,
+  GenerateAppFromPromptInput,
   ValidateAppResult,
   ValidationIssue,
   JsonObject,
@@ -10,6 +11,23 @@ type AppPageSeed = {
   slug: string;
   title: string;
   pageUri: string;
+};
+
+type GeneratedAppPagePlan = {
+  slug: string;
+  title: string;
+  pageType: "dashboard" | "table-list" | "form";
+  promptHint: string;
+};
+
+type AppPromptBlueprint = {
+  name: string;
+  slug: string;
+  description: string;
+  navigationStyle: string;
+  pages: GeneratedAppPagePlan[];
+  summary: string;
+  assumptions: string[];
 };
 
 function pushIssue(
@@ -38,6 +56,129 @@ function defaultBuildProfiles(): JsonObject[] {
       mode: "debug",
     },
   ];
+}
+
+function truncateText(value: string, maxLength: number): string {
+  const trimmed = value.trim();
+  if (trimmed.length <= maxLength) {
+    return trimmed;
+  }
+  return `${trimmed.slice(0, Math.max(0, maxLength - 3))}...`;
+}
+
+function inferDomain(prompt: string): {
+  noun: string;
+  dashboardTitle: string;
+  listTitle: string;
+  formTitle: string;
+  listHint: string;
+  formHint: string;
+} {
+  const lower = prompt.toLowerCase();
+  if (/订单|order|fulfillment|shipment/.test(prompt) || /order|fulfillment|shipment/.test(lower)) {
+    return {
+      noun: "订单",
+      dashboardTitle: "订单总览",
+      listTitle: "订单列表",
+      formTitle: "订单详情",
+      listHint: "列表页，展示状态、负责人、时间和操作按钮",
+      formHint: "详情或编辑页，展示订单关键信息和审批/处理表单",
+    };
+  }
+  if (/客户|customer|crm|lead/.test(prompt) || /customer|crm|lead/.test(lower)) {
+    return {
+      noun: "客户",
+      dashboardTitle: "客户总览",
+      listTitle: "客户列表",
+      formTitle: "客户详情",
+      listHint: "列表页，展示搜索、筛选、负责人和状态列",
+      formHint: "详情或编辑页，展示客户档案、负责人和备注表单",
+    };
+  }
+  if (/商品|product|inventory|sku/.test(prompt) || /product|inventory|sku/.test(lower)) {
+    return {
+      noun: "商品",
+      dashboardTitle: "商品运营总览",
+      listTitle: "商品列表",
+      formTitle: "商品编辑",
+      listHint: "列表页，展示库存、状态、负责人和搜索筛选",
+      formHint: "编辑页，展示商品信息、库存和上下架配置表单",
+    };
+  }
+  return {
+    noun: "业务",
+    dashboardTitle: "业务总览",
+    listTitle: "业务列表",
+    formTitle: "业务配置",
+    listHint: "列表页，展示搜索、筛选、状态列和操作按钮",
+    formHint: "配置页，展示基础信息、负责人和备注表单",
+  };
+}
+
+export function generateAppBlueprint(
+  input: GenerateAppFromPromptInput,
+): AppPromptBlueprint {
+  const prompt = input.prompt.trim();
+  const domain = inferDomain(prompt);
+  const baseName = truncateText(prompt, 16);
+  const name = typeof input.name === "string" && input.name.trim().length > 0
+    ? input.name.trim()
+    : baseName
+      ? `${baseName} 应用`
+      : `${domain.noun}管理应用`;
+  const slug = normalizeSlug(input.slug ?? name);
+  const navigationStyle = typeof input.navigationStyle === "string"
+    && input.navigationStyle.trim().length > 0
+    ? input.navigationStyle.trim()
+    : /tabs|tab|标签/.test(prompt.toLowerCase())
+      ? "tabs"
+      : /top|topbar|顶部/.test(prompt.toLowerCase())
+        ? "topbar"
+        : "sidebar";
+
+  const pages: GeneratedAppPagePlan[] = [
+    {
+      slug: `${slug}-dashboard`,
+      title: domain.dashboardTitle,
+      pageType: "dashboard",
+      promptHint: `${prompt}，首页仪表盘，包含核心 KPI、趋势和提醒模块`,
+    },
+    {
+      slug: `${slug}-list`,
+      title: domain.listTitle,
+      pageType: "table-list",
+      promptHint: `${prompt}，${domain.listHint}`,
+    },
+    {
+      slug: `${slug}-detail`,
+      title: domain.formTitle,
+      pageType: "form",
+      promptHint: `${prompt}，${domain.formHint}`,
+    },
+  ];
+
+  if (/设置|setting|config/.test(prompt) || /setting|config/.test(prompt.toLowerCase())) {
+    pages.push({
+      slug: `${slug}-settings`,
+      title: "系统设置",
+      pageType: "form",
+      promptHint: `${prompt}，系统设置页，展示主题、通知和权限配置表单`,
+    });
+  }
+
+  return {
+    name,
+    slug,
+    description: `AI generated multi-page app skeleton for: ${truncateText(prompt, 72)}`,
+    navigationStyle,
+    pages,
+    summary: `Generated ${pages.length} pages for a ${navigationStyle} application shell.`,
+    assumptions: [
+      "Used one dashboard page as the home entry.",
+      "Used one table/list page for the primary collection workflow.",
+      "Used one form page for detail or settings editing.",
+    ],
+  };
 }
 
 export function createAppSchema(

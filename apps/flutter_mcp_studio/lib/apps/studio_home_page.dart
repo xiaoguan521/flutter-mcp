@@ -16,6 +16,7 @@ class StudioHomePage extends StatefulWidget {
 class _StudioHomePageState extends State<StudioHomePage> {
   final TextEditingController _sourceController = TextEditingController();
   final TextEditingController _appSourceController = TextEditingController();
+  final TextEditingController _appPromptController = TextEditingController();
   final TextEditingController _promptController = TextEditingController();
   final TextEditingController _instructionController = TextEditingController();
   final TextEditingController _appNameController = TextEditingController();
@@ -39,6 +40,7 @@ class _StudioHomePageState extends State<StudioHomePage> {
   void dispose() {
     _sourceController.dispose();
     _appSourceController.dispose();
+    _appPromptController.dispose();
     _promptController.dispose();
     _instructionController.dispose();
     _appNameController.dispose();
@@ -1592,6 +1594,67 @@ class _StudioHomePageState extends State<StudioHomePage> {
         ),
         const SizedBox(height: 10),
         TextField(
+          controller: _appPromptController,
+          maxLines: 3,
+          minLines: 2,
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: const Color(0xFFF8FAFC),
+            hintText: '例如：生成一个订单管理后台，包含总览、订单列表、订单详情和设置页',
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide:
+                  const BorderSide(color: Color(0xFFEA580C), width: 1.5),
+            ),
+            contentPadding: const EdgeInsets.all(12),
+          ),
+          style: const TextStyle(fontSize: 13, height: 1.4),
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          height: 36,
+          child: FilledButton.icon(
+            onPressed: controller.isGeneratingApp
+                ? null
+                : () => controller.generateAppFromPrompt(
+                      prompt: _appPromptController.text,
+                      navigationStyle: _selectedNavigationStyle,
+                    ),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFC2410C),
+            ),
+            icon: controller.isGeneratingApp
+                ? const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(Icons.auto_awesome, size: 16),
+            label: Text(
+              controller.isGeneratingApp ? '生成中…' : 'AI 生成多页应用',
+            ),
+          ),
+        ),
+        if (controller.lastGeneratedApp != null) ...[
+          const SizedBox(height: 10),
+          _buildGeneratedAppSummary(controller.lastGeneratedApp!),
+        ],
+        const SizedBox(height: 12),
+        const Divider(height: 1),
+        const SizedBox(height: 12),
+        TextField(
           controller: _appNameController,
           decoration: InputDecoration(
             filled: true,
@@ -1946,6 +2009,55 @@ class _StudioHomePageState extends State<StudioHomePage> {
         ),
         if (validation != null) _buildAppValidationPanel(validation),
       ],
+    );
+  }
+
+  Widget _buildGeneratedAppSummary(GeneratedAppResultModel result) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF7ED),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFFED7AA)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            result.summary,
+            style: const TextStyle(
+              color: Color(0xFF9A3412),
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          if (result.generatedPages.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            ...result.generatedPages.map(
+              (page) => Text(
+                '${page.title} · ${page.pageType}',
+                style: const TextStyle(
+                  color: Color(0xFF7C2D12),
+                  fontSize: 11,
+                  height: 1.35,
+                ),
+              ),
+            ),
+          ],
+          if (result.assumptions.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            ...result.assumptions.map(
+              (item) => Text(
+                '· $item',
+                style: const TextStyle(
+                  color: Color(0xFF9A3412),
+                  fontSize: 11,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 

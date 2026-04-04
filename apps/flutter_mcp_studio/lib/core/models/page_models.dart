@@ -389,6 +389,76 @@ class CreateAppResultModel {
   }
 }
 
+class GeneratedAppPageResultModel {
+  GeneratedAppPageResultModel({
+    required this.slug,
+    required this.title,
+    required this.pageType,
+    required this.stableUri,
+    required this.versionUri,
+  });
+
+  final String slug;
+  final String title;
+  final String pageType;
+  final String stableUri;
+  final String versionUri;
+
+  factory GeneratedAppPageResultModel.fromJson(Map<String, dynamic> json) {
+    return GeneratedAppPageResultModel(
+      slug: json['slug'] as String? ?? '',
+      title: json['title'] as String? ?? '',
+      pageType: json['pageType'] as String? ?? 'dashboard',
+      stableUri: json['stableUri'] as String? ?? '',
+      versionUri: json['versionUri'] as String? ?? '',
+    );
+  }
+}
+
+class GeneratedAppResultModel {
+  GeneratedAppResultModel({
+    required this.app,
+    required this.stableUri,
+    required this.versionUri,
+    required this.summary,
+    required this.warnings,
+    required this.assumptions,
+    required this.generatedPages,
+  });
+
+  final AppDocumentModel app;
+  final String stableUri;
+  final String versionUri;
+  final String summary;
+  final List<String> warnings;
+  final List<String> assumptions;
+  final List<GeneratedAppPageResultModel> generatedPages;
+
+  factory GeneratedAppResultModel.fromJson(Map<String, dynamic> json) {
+    return GeneratedAppResultModel(
+      app: AppDocumentModel.fromJson(
+        Map<String, dynamic>.from(json['app'] as Map<String, dynamic>),
+      ),
+      stableUri: json['stableUri'] as String? ?? '',
+      versionUri: json['versionUri'] as String? ?? '',
+      summary: json['summary'] as String? ?? '',
+      warnings: (json['warnings'] as List<dynamic>? ?? <dynamic>[])
+          .map((item) => item.toString())
+          .toList(),
+      assumptions: (json['assumptions'] as List<dynamic>? ?? <dynamic>[])
+          .map((item) => item.toString())
+          .toList(),
+      generatedPages: (json['generatedPages'] as List<dynamic>? ?? <dynamic>[])
+          .map(
+            (item) => GeneratedAppPageResultModel.fromJson(
+              Map<String, dynamic>.from(item as Map),
+            ),
+          )
+          .toList(),
+    );
+  }
+}
+
 class AndroidBuildResultModel {
   AndroidBuildResultModel({
     required this.success,

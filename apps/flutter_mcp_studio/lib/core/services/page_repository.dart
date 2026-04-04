@@ -199,6 +199,31 @@ class PageRepository {
     );
   }
 
+  Future<GeneratedAppResultModel> generateAppFromPrompt({
+    required String prompt,
+    String? name,
+    String? slug,
+    String? navigationStyle,
+    String? locale,
+  }) async {
+    final response = await _client.post(
+      _uri('/api/tools/generate_app_from_prompt'),
+      headers: <String, String>{'content-type': 'application/json'},
+      body: jsonEncode(<String, dynamic>{
+        'prompt': prompt,
+        if (name != null && name.isNotEmpty) 'name': name,
+        if (slug != null && slug.isNotEmpty) 'slug': slug,
+        if (navigationStyle != null && navigationStyle.isNotEmpty)
+          'navigationStyle': navigationStyle,
+        if (locale != null && locale.isNotEmpty) 'locale': locale,
+      }),
+    );
+    final body = _decodeBody(response);
+    return GeneratedAppResultModel.fromJson(
+      Map<String, dynamic>.from(body['result'] as Map),
+    );
+  }
+
   Future<GeneratedPageResultModel> generatePageFromPrompt({
     required String prompt,
     required String pageType,
