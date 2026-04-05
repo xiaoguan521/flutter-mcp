@@ -27,6 +27,18 @@ class PageRepository {
         .toList();
   }
 
+  Future<List<AppSummaryModel>> listApps() async {
+    final response = await _client.get(_uri('/api/apps'));
+    final body = _decodeBody(response);
+    final result = body['result'] as List<dynamic>;
+    return result
+        .map(
+          (item) =>
+              AppSummaryModel.fromJson(Map<String, dynamic>.from(item as Map)),
+        )
+        .toList();
+  }
+
   Future<PageDocumentModel> loadPage(String slug, {String? version}) async {
     final response = await _client.get(
       _uri(
@@ -40,16 +52,41 @@ class PageRepository {
     );
   }
 
-  Future<PageDocumentModel> resolvePageUri(String uri) async {
+  Future<AppDocumentModel> loadApp(String slug, {String? version}) async {
     final response = await _client.get(
-      _uri('/api/resources/resolve', <String, String>{'uri': uri}),
+      _uri(
+        '/api/apps/$slug',
+        version == null ? null : <String, String>{'version': version},
+      ),
     );
     final body = _decodeBody(response);
-    final result = Map<String, dynamic>.from(body['result'] as Map);
+    return AppDocumentModel.fromJson(
+      Map<String, dynamic>.from(body['result'] as Map),
+    );
+  }
+
+  Future<PageDocumentModel> resolvePageUri(String uri) async {
+    final result = await resolveResourceUri(uri);
     if (!result.containsKey('definition')) {
       throw Exception('Resource is not a page snapshot: $uri');
     }
     return PageDocumentModel.fromJson(result);
+  }
+
+  Future<AppDocumentModel> resolveAppUri(String uri) async {
+    final result = await resolveResourceUri(uri);
+    if (!result.containsKey('schema')) {
+      throw Exception('Resource is not an app snapshot: $uri');
+    }
+    return AppDocumentModel.fromJson(result);
+  }
+
+  Future<Map<String, dynamic>> resolveResourceUri(String uri) async {
+    final response = await _client.get(
+      _uri('/api/resources/resolve', <String, String>{'uri': uri}),
+    );
+    final body = _decodeBody(response);
+    return Map<String, dynamic>.from(body['result'] as Map);
   }
 
   Future<Map<String, dynamic>> invokeTool(

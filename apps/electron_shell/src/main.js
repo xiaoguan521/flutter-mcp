@@ -4,15 +4,16 @@ const path = require('node:path');
 
 const defaultFlutterIndex = path.resolve(
   __dirname,
-  '../../flutter_mcp_studio/build/web/index.html',
+  '../../flutter_mcp_runtime/build/web/index.html',
 );
 
 function resolveFlutterEntry() {
-  if (process.env.FLUTTER_WEB_URL) {
-    return process.env.FLUTTER_WEB_URL;
+  if (process.env.RUNTIME_WEB_URL || process.env.FLUTTER_WEB_URL) {
+    return process.env.RUNTIME_WEB_URL || process.env.FLUTTER_WEB_URL;
   }
 
-  const candidate = process.env.FLUTTER_WEB_DIST || defaultFlutterIndex;
+  const candidate =
+    process.env.RUNTIME_WEB_DIST || process.env.FLUTTER_WEB_DIST || defaultFlutterIndex;
   if (fs.existsSync(candidate)) {
     return `file://${candidate.replace(/\\/g, '/')}`;
   }
@@ -43,9 +44,9 @@ function createWindow() {
         encodeURIComponent(`
           <html>
             <body style="font-family:Segoe UI, sans-serif;background:#f4f1ea;padding:32px;color:#0f172a">
-              <h1>Flutter MCP Studio Electron Shell</h1>
-              <p>未找到 Flutter Web 构建产物。</p>
-              <p>请先运行 <code>flutter build web</code>，或通过环境变量 <code>FLUTTER_WEB_URL</code> 指向 dev server。</p>
+              <h1>Flutter MCP Runtime Electron Shell</h1>
+              <p>未找到 Runtime Web 构建产物。</p>
+              <p>请先运行 <code>./scripts/build-runtime-web.sh</code>，或通过环境变量 <code>RUNTIME_WEB_URL</code> / <code>FLUTTER_WEB_URL</code> 指向 dev server。</p>
             </body>
           </html>
         `),
@@ -73,4 +74,3 @@ app.on('window-all-closed', () => {
     app.quit();
   }
 });
-

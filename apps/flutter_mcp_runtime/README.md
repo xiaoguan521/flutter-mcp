@@ -2,6 +2,8 @@
 
 一个独立于 Studio 的轻量 Runtime 应用，只负责：
 
+- 从 `MCP UI Server` 读取已发布应用与页面
+- 按 `app schema` 渲染多页应用导航壳
 - 从 `MCP UI Server` 读取已发布页面
 - 按 `slug`、`version` 或 `mcpui://` 资源 URI 拉取页面 JSON DSL
 - 使用 `flutter_mcp_ui_runtime` 把页面渲染成真正的 Flutter UI
@@ -66,7 +68,10 @@ flowchart LR
     N["AI / MCP Client"] -->|读取资源 / 调工具| C
 ```
 
-这个新建的 `flutter_mcp_runtime` 就是往这张图里的 `生产 Runtime Flutter App / Runtime Web` 方向落地的第一步。
+当前这个 `flutter_mcp_runtime` 已经支持两种运行模式：
+
+- 单页模式：直接渲染某个 page resource
+- 应用模式：读取 app schema，渲染 route / navigation shell，并切换到对应页面
 
 ## 多端支持结论
 
@@ -111,6 +116,8 @@ Runtime 支持 2 类入口参数：
 - `dart-define`
 - Web URL query 参数
 
+优先级上，Runtime 会先尝试加载 `app`，再回退到单页 `page`。
+
 ### 1. 指定服务端地址
 
 ```bash
@@ -124,7 +131,50 @@ flutter run -d chrome \
 http://localhost:xxxx/?server=http://127.0.0.1:8787
 ```
 
-### 2. 按页面 slug 加载
+### 2. 按应用 slug 加载
+
+```bash
+flutter run -d chrome \
+  --dart-define=MCP_UI_SERVER_URL=http://127.0.0.1:8787 \
+  --dart-define=MCP_UI_APP_SLUG=sample-admin
+```
+
+或：
+
+```text
+http://localhost:xxxx/?appSlug=sample-admin
+```
+
+### 3. 按应用固定路由加载
+
+```bash
+flutter run -d chrome \
+  --dart-define=MCP_UI_SERVER_URL=http://127.0.0.1:8787 \
+  --dart-define=MCP_UI_APP_SLUG=sample-admin \
+  --dart-define=MCP_UI_APP_ROUTE=/orders
+```
+
+或：
+
+```text
+http://localhost:xxxx/?appSlug=sample-admin&route=/orders
+```
+
+### 4. 按应用资源 URI 加载
+
+```bash
+flutter run -d chrome \
+  --dart-define=MCP_UI_SERVER_URL=http://127.0.0.1:8787 \
+  --dart-define=MCP_UI_APP_URI=mcpui://apps/sample-admin/stable
+```
+
+或：
+
+```text
+http://localhost:xxxx/?appUri=mcpui://apps/sample-admin/stable
+```
+
+### 5. 按页面 slug 加载
 
 ```bash
 flutter run -d chrome \
@@ -138,7 +188,7 @@ flutter run -d chrome \
 http://localhost:xxxx/?slug=dashboard
 ```
 
-### 3. 按固定版本加载
+### 6. 按固定页面版本加载
 
 ```bash
 flutter run -d chrome \
@@ -153,7 +203,7 @@ flutter run -d chrome \
 http://localhost:xxxx/?slug=dashboard&version=v20260404131626-625
 ```
 
-### 4. 按资源 URI 加载
+### 7. 按页面资源 URI 加载
 
 ```bash
 flutter run -d chrome \

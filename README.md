@@ -6,6 +6,7 @@
 
 - 一个自托管、开源、可本地运行的 MCP UI Server
 - 一个 Flutter Studio 骨架，使用 `flutter_mcp_ui_runtime` 渲染 JSON DSL
+- 一个独立的 Flutter Runtime 应用，用于承接已发布页面和多页应用
 - 一组 Ant Design 风格自定义 Widget 注册示例
 - 页面固化保存、版本管理、稳定资源 URI 约定
 - Electron 桌面壳示例
@@ -33,6 +34,7 @@
 .
 ├─ apps
 │  ├─ flutter_mcp_studio
+│  ├─ flutter_mcp_runtime
 │  │  ├─ assets/samples
 │  │  └─ lib
 │  ├─ electron_shell
@@ -47,13 +49,16 @@
 - `apps/flutter_mcp_studio`
   - Flutter Studio 主应用
   - `assets/samples/*.page.json` 是样例页面与服务端种子页的单一来源
+- `apps/flutter_mcp_runtime`
+  - 面向最终用户的轻量 Runtime 应用
+  - 支持单页资源和 App Schema 导航壳渲染
 - `server/mcp-ui-server`
   - 默认使用 SQLite 的 MCP 服务
   - 可切换到 Valkey
 - `apps/electron_shell`
-  - Electron 容器，加载 Flutter Web 构建产物或 dev URL
+  - Electron 容器，默认加载 `flutter_mcp_runtime` 的 Web 构建产物或 dev URL
 - `apps/android_webview_shell`
-  - Android 原生 WebView 壳，默认加载本机开发地址
+  - Android 原生 WebView 壳，默认加载 Runtime 的本机开发地址
 
 ## JSON DSL 约定
 
@@ -189,6 +194,7 @@ cd /Users/xiaochen/Downloads/flutter-mcp
 ```
 
 这些脚本会自动尝试注入 Homebrew 安装的 `openjdk@17`，默认把 Flutter Studio 指向 `http://127.0.0.1:8787`。其中 `build-studio-web.sh` 会为当前依赖组合关闭 web icon tree shaking 以避免构建失败。
+同时，Studio 会默认把 Runtime 打开链接指向 `http://127.0.0.1:18080`；如果你的 Runtime 不在这个地址，可以通过环境变量 `MCP_UI_RUNTIME_BASE_URL` 覆盖。
 
 ### 1. 启动 MCP UI Server
 
@@ -287,15 +293,15 @@ cd M:\flutter-mcp\apps\flutter_mcp_studio
 ### 方式 A：加载 Flutter dev server
 
 ```powershell
-$env:FLUTTER_WEB_URL='http://127.0.0.1:8088'
+$env:RUNTIME_WEB_URL='http://127.0.0.1:18080'
 npm --workspace apps/electron_shell run dev
 ```
 
 ### 方式 B：加载 Flutter Web 构建产物
 
 ```powershell
-cd M:\flutter-mcp\apps\flutter_mcp_studio
-flutter build web
+cd M:\flutter-mcp\apps\flutter_mcp_runtime
+flutter build web --no-tree-shake-icons
 
 cd M:\flutter-mcp
 npm --workspace apps/electron_shell run dev
@@ -303,19 +309,26 @@ npm --workspace apps/electron_shell run dev
 
 Electron 默认会寻找：
 
-- `apps/flutter_mcp_studio/build/web/index.html`
+- `apps/flutter_mcp_runtime/build/web/index.html`
 
 ## Android WebView 壳
 
 默认加载地址是：
 
-- `http://10.0.2.2:8088`
+- `http://10.0.2.2:18080?server=http://10.0.2.2:8787`
+
+推荐先在宿主机启动 Runtime Web Server：
+
+```bash
+cd /Users/xiaochen/Downloads/flutter-mcp
+./scripts/run-runtime-web-server.sh
+```
 
 如果你的 Flutter Web dev server 不在这个地址，可以通过 Gradle 属性覆盖：
 
 ```powershell
 cd M:\flutter-mcp\apps\android_webview_shell
-gradlew installDebug -PflutterWebUrl=http://10.0.2.2:8088
+gradlew installDebug -PruntimeWebUrl=http://10.0.2.2:18080?server=http://10.0.2.2:8787
 ```
 
 ## 已完成的核心链路

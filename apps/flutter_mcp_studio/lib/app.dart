@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'apps/studio_home_page.dart';
+import 'core/config/studio_launch_config.dart';
 import 'core/services/mcp_bridge_service.dart';
 import 'core/services/page_repository.dart';
 import 'features/editor/studio_controller.dart';
@@ -11,9 +12,11 @@ class FlutterMcpStudioApp extends StatelessWidget {
   const FlutterMcpStudioApp({
     super.key,
     required this.draftStore,
+    required this.config,
   });
 
   final LocalDraftStore draftStore;
+  final StudioLaunchConfig config;
 
   @override
   Widget build(BuildContext context) {
@@ -33,7 +36,7 @@ class FlutterMcpStudioApp extends StatelessWidget {
           scaffoldBackgroundColor: const Color(0xFFF4F1EA),
           useMaterial3: true,
         ),
-        home: const StudioHomePage(),
+        home: StudioHomePage(runtimeBaseUrl: config.runtimeBaseUrl),
       ),
     );
   }

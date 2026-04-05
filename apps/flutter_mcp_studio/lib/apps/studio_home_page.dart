@@ -7,7 +7,12 @@ import '../features/editor/studio_controller.dart';
 import '../features/runtime/runtime_canvas.dart';
 
 class StudioHomePage extends StatefulWidget {
-  const StudioHomePage({super.key});
+  const StudioHomePage({
+    super.key,
+    this.runtimeBaseUrl,
+  });
+
+  final String? runtimeBaseUrl;
 
   @override
   State<StudioHomePage> createState() => _StudioHomePageState();
@@ -472,6 +477,7 @@ class _StudioHomePageState extends State<StudioHomePage> {
                 ),
               ),
             ),
+          ..._buildPageRuntimeLaunchSection(controller, document),
           // -- AI 生成摘要 --
           if (generation != null) _buildGenerationSummary(generation),
           if (explanation != null) _buildExplanationSummary(explanation),
@@ -569,6 +575,11 @@ class _StudioHomePageState extends State<StudioHomePage> {
                 ),
               ),
             ),
+          ..._buildAppRuntimeLaunchSection(
+            controller,
+            app,
+            activeRoute: activeRoute,
+          ),
           if (routes.isNotEmpty) ...[
             const SizedBox(height: 8),
             const Text(
@@ -2902,6 +2913,232 @@ class _StudioHomePageState extends State<StudioHomePage> {
     return buffer.toString().trimRight();
   }
 
+  List<Widget> _buildPageRuntimeLaunchSection(
+    StudioController controller,
+    PageDocumentModel? document,
+  ) {
+    final links = <_RuntimeLaunchLink>[
+      if ((document?.stableUri ?? '').isNotEmpty)
+        _RuntimeLaunchLink(
+          label: '复制 Runtime 稳定链接',
+          url: _buildRuntimeUrl(
+            serverUrl: controller.repository.baseUrl,
+            pageUri: document!.stableUri,
+          ),
+        ),
+      if ((document?.versionUri ?? '').isNotEmpty)
+        _RuntimeLaunchLink(
+          label: '复制 Runtime 版本链接',
+          url: _buildRuntimeUrl(
+            serverUrl: controller.repository.baseUrl,
+            pageUri: document!.versionUri,
+          ),
+        ),
+    ].where((link) => link.url != null && link.url!.isNotEmpty).toList();
+
+    if (links.isEmpty) {
+      return const <Widget>[];
+    }
+
+    return <Widget>[
+      const SizedBox(height: 10),
+      _buildRuntimeLinkCard(
+        title: 'Runtime 访问',
+        accentColor: const Color(0xFF0F766E),
+        borderColor: const Color(0xFF99F6E4),
+        backgroundColor: const Color(0xFFF0FDFA),
+        textColor: const Color(0xFF115E59),
+        links: links,
+      ),
+    ];
+  }
+
+  List<Widget> _buildAppRuntimeLaunchSection(
+    StudioController controller,
+    AppDocumentModel app, {
+    String? activeRoute,
+  }) {
+    final links = <_RuntimeLaunchLink>[
+      if ((app.stableUri ?? '').isNotEmpty)
+        _RuntimeLaunchLink(
+          label: activeRoute == null || activeRoute.isEmpty
+              ? '复制 Runtime 稳定链接'
+              : '复制当前路由稳定链接',
+          url: _buildRuntimeUrl(
+            serverUrl: controller.repository.baseUrl,
+            appUri: app.stableUri,
+            route: activeRoute,
+          ),
+        ),
+      if ((app.versionUri ?? '').isNotEmpty)
+        _RuntimeLaunchLink(
+          label: activeRoute == null || activeRoute.isEmpty
+              ? '复制 Runtime 版本链接'
+              : '复制当前路由版本链接',
+          url: _buildRuntimeUrl(
+            serverUrl: controller.repository.baseUrl,
+            appUri: app.versionUri,
+            route: activeRoute,
+          ),
+        ),
+    ].where((link) => link.url != null && link.url!.isNotEmpty).toList();
+
+    if (links.isEmpty) {
+      return const <Widget>[];
+    }
+
+    return <Widget>[
+      const SizedBox(height: 8),
+      _buildRuntimeLinkCard(
+        title: 'Runtime 访问',
+        accentColor: const Color(0xFFEA580C),
+        borderColor: const Color(0xFFFED7AA),
+        backgroundColor: const Color(0xFFFFFBEB),
+        textColor: const Color(0xFF9A3412),
+        links: links,
+      ),
+    ];
+  }
+
+  Widget _buildRuntimeLinkCard({
+    required String title,
+    required Color accentColor,
+    required Color borderColor,
+    required Color backgroundColor,
+    required Color textColor,
+    required List<_RuntimeLaunchLink> links,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: borderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Icon(Icons.open_in_new_rounded, size: 16, color: accentColor),
+              const SizedBox(width: 6),
+              Text(
+                title,
+                style: TextStyle(
+                  color: textColor,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: links
+                .map(
+                  (link) => ActionChip(
+                    avatar: Icon(
+                      Icons.copy_all_rounded,
+                      size: 16,
+                      color: textColor,
+                    ),
+                    backgroundColor: Colors.white,
+                    side: BorderSide(color: borderColor),
+                    label: Text(
+                      link.label,
+                      style: TextStyle(
+                        color: textColor,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    onPressed: () => _copyText(
+                      link.url!,
+                      '${link.label}已复制到剪贴板',
+                    ),
+                  ),
+                )
+                .toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String? _buildRuntimeUrl({
+    required String serverUrl,
+    String? pageUri,
+    String? appUri,
+    String? route,
+  }) {
+    final runtimeBaseUrl = widget.runtimeBaseUrl?.trim();
+    if (runtimeBaseUrl == null || runtimeBaseUrl.isEmpty) {
+      return null;
+    }
+
+    try {
+      final baseUri = Uri.parse(runtimeBaseUrl);
+      final query = <String, String>{
+        ...baseUri.queryParameters,
+        'server': serverUrl,
+      };
+      query.removeWhere((key, value) => value.trim().isEmpty);
+
+      if (pageUri != null && pageUri.isNotEmpty) {
+        query
+          ..remove('app')
+          ..remove('appSlug')
+          ..remove('appUri')
+          ..remove('appVersion')
+          ..remove('appRoute')
+          ..remove('route')
+          ..remove('pageSlug')
+          ..remove('pageVersion')
+          ..remove('pageUri')
+          ..remove('slug')
+          ..remove('uri')
+          ..remove('version');
+        query['uri'] = pageUri;
+      }
+
+      if (appUri != null && appUri.isNotEmpty) {
+        query
+          ..remove('app')
+          ..remove('appSlug')
+          ..remove('appUri')
+          ..remove('appVersion')
+          ..remove('appRoute')
+          ..remove('route')
+          ..remove('pageSlug')
+          ..remove('pageVersion')
+          ..remove('pageUri')
+          ..remove('slug')
+          ..remove('uri')
+          ..remove('version');
+        query['appUri'] = appUri;
+        if (route != null && route.isNotEmpty) {
+          query['route'] = route;
+        }
+      }
+
+      return baseUri.replace(queryParameters: query).toString();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _copyText(String text, String message) async {
+    await Clipboard.setData(ClipboardData(text: text));
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
+  }
+
   Widget _panel({required Widget child}) {
     return Container(
       padding: const EdgeInsets.all(18),
@@ -2920,4 +3157,14 @@ class _StudioHomePageState extends State<StudioHomePage> {
       child: child,
     );
   }
+}
+
+class _RuntimeLaunchLink {
+  const _RuntimeLaunchLink({
+    required this.label,
+    required this.url,
+  });
+
+  final String label;
+  final String? url;
 }

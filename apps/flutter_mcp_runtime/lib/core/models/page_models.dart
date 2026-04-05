@@ -30,6 +30,41 @@ class PageSummaryModel {
   }
 }
 
+class AppSummaryModel {
+  AppSummaryModel({
+    required this.slug,
+    required this.name,
+    required this.stableVersion,
+    required this.updatedAt,
+    required this.stableUri,
+    required this.versionUri,
+    this.description,
+    this.homePage,
+  });
+
+  final String slug;
+  final String name;
+  final String stableVersion;
+  final String updatedAt;
+  final String stableUri;
+  final String versionUri;
+  final String? description;
+  final String? homePage;
+
+  factory AppSummaryModel.fromJson(Map<String, dynamic> json) {
+    return AppSummaryModel(
+      slug: json['slug'] as String,
+      name: json['name'] as String,
+      stableVersion: json['stableVersion'] as String? ?? 'stable',
+      updatedAt: json['updatedAt'] as String? ?? '',
+      stableUri: json['stableUri'] as String? ?? '',
+      versionUri: json['versionUri'] as String? ?? '',
+      description: json['description'] as String?,
+      homePage: json['homePage'] as String?,
+    );
+  }
+}
+
 class PageDocumentModel {
   PageDocumentModel({
     required this.slug,
@@ -74,6 +109,58 @@ class PageDocumentModel {
       isStable: json['isStable'] as bool? ?? false,
       definition: Map<String, dynamic>.from(
         json['definition'] as Map<String, dynamic>,
+      ),
+    );
+  }
+}
+
+class AppDocumentModel {
+  AppDocumentModel({
+    required this.appId,
+    required this.slug,
+    required this.name,
+    required this.schema,
+    this.description,
+    this.version,
+    this.author,
+    this.note,
+    this.stableUri,
+    this.versionUri,
+    this.createdAt,
+    this.updatedAt,
+    this.isStable = false,
+  });
+
+  final String appId;
+  final String slug;
+  final String name;
+  final String? description;
+  final String? version;
+  final String? author;
+  final String? note;
+  final String? stableUri;
+  final String? versionUri;
+  final String? createdAt;
+  final String? updatedAt;
+  final bool isStable;
+  final Map<String, dynamic> schema;
+
+  factory AppDocumentModel.fromJson(Map<String, dynamic> json) {
+    return AppDocumentModel(
+      appId: json['appId'] as String? ?? '',
+      slug: json['slug'] as String,
+      name: json['name'] as String,
+      description: json['description'] as String?,
+      version: json['version'] as String?,
+      author: json['author'] as String?,
+      note: json['note'] as String?,
+      stableUri: json['stableUri'] as String?,
+      versionUri: json['versionUri'] as String?,
+      createdAt: json['createdAt'] as String?,
+      updatedAt: json['updatedAt'] as String?,
+      isStable: json['isStable'] as bool? ?? false,
+      schema: Map<String, dynamic>.from(
+        json['schema'] as Map<String, dynamic>? ?? <String, dynamic>{},
       ),
     );
   }

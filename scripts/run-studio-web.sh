@@ -4,10 +4,14 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MCP_UI_SERVER_URL="${MCP_UI_SERVER_URL:-http://127.0.0.1:8787}"
+MCP_UI_RUNTIME_BASE_URL="${MCP_UI_RUNTIME_BASE_URL:-http://127.0.0.1:18080}"
 
 # shellcheck source=/dev/null
 source "${ROOT_DIR}/scripts/env.macos.sh"
 
 cd "${ROOT_DIR}/apps/flutter_mcp_studio"
 flutter pub get
-flutter run -d chrome --dart-define=MCP_UI_SERVER_URL="${MCP_UI_SERVER_URL}" "$@"
+flutter run -d chrome \
+  --dart-define=MCP_UI_SERVER_URL="${MCP_UI_SERVER_URL}" \
+  --dart-define=MCP_UI_RUNTIME_BASE_URL="${MCP_UI_RUNTIME_BASE_URL}" \
+  "$@"

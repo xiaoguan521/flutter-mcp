@@ -13,7 +13,8 @@ android {
     versionCode 1
     versionName "0.1.0"
 
-    def flutterWebUrl = project.findProperty("flutterWebUrl") ?: "http://10.0.2.2:8088"
+    def runtimeWebUrl = project.findProperty("runtimeWebUrl")
+    def flutterWebUrl = runtimeWebUrl ?: project.findProperty("flutterWebUrl") ?: "http://10.0.2.2:18080?server=http://10.0.2.2:8787"
     buildConfigField "String", "FLUTTER_WEB_URL", "\"${flutterWebUrl}\""
   }
 
@@ -39,4 +40,3 @@ dependencies {
   implementation "androidx.webkit:webkit:1.12.1"
   implementation "com.google.android.material:material:1.12.0"
 }
-

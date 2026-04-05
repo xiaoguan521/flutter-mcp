@@ -18,15 +18,43 @@ const String _defaultPageUri = String.fromEnvironment(
   defaultValue: '',
 );
 
+const String _defaultAppSlug = String.fromEnvironment(
+  'MCP_UI_APP_SLUG',
+  defaultValue: '',
+);
+
+const String _defaultAppVersion = String.fromEnvironment(
+  'MCP_UI_APP_VERSION',
+  defaultValue: '',
+);
+
+const String _defaultAppUri = String.fromEnvironment(
+  'MCP_UI_APP_URI',
+  defaultValue: '',
+);
+
+const String _defaultAppRoute = String.fromEnvironment(
+  'MCP_UI_APP_ROUTE',
+  defaultValue: '',
+);
+
 class RuntimeLaunchConfig {
   const RuntimeLaunchConfig({
     required this.serverUrl,
+    this.appSlug,
+    this.appVersion,
+    this.appUri,
+    this.appRoute,
     this.pageSlug,
     this.pageVersion,
     this.pageUri,
   });
 
   final String serverUrl;
+  final String? appSlug;
+  final String? appVersion;
+  final String? appUri;
+  final String? appRoute;
   final String? pageSlug;
   final String? pageVersion;
   final String? pageUri;
@@ -40,6 +68,18 @@ class RuntimeLaunchConfig {
 
     return RuntimeLaunchConfig(
       serverUrl: serverUrl,
+      appSlug: _firstNonEmpty(query['appSlug'], query['app'], _defaultAppSlug),
+      appVersion: _firstNonEmpty(
+        query['appVersion'],
+        query['app_ver'],
+        _defaultAppVersion,
+      ),
+      appUri: _firstNonEmpty(query['appUri'], query['app_uri'], _defaultAppUri),
+      appRoute: _firstNonEmpty(
+        query['route'],
+        query['appRoute'],
+        _defaultAppRoute,
+      ),
       pageSlug: _firstNonEmpty(
         query['slug'],
         query['pageSlug'],

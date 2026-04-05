@@ -4,7 +4,7 @@
 
     <application
         android:allowBackup="true"
-        android:label="MCP Shell"
+        android:label="MCP Runtime Shell"
         android:supportsRtl="true"
         android:theme="@style/Theme.Material3.Light.NoActionBar"
         android:usesCleartextTraffic="true">
@@ -19,4 +19,3 @@
         </activity>
     </application>
 </manifest>
-
